@@ -226,8 +226,7 @@ duckdb::unique_ptr<GlobalTableFunctionState> DrivingDistanceInit(ClientContext &
 	auto &bind_data = input.bind_data->Cast<RoutingBindData>();
 	auto state = duckdb::make_uniq<RoutingGlobalState<DrivingDistanceRow>>();
 	auto edges = LoadEdges(context, bind_data.edges_sql);
-	state->rows = DrivingDistance(edges, bind_data.starts, bind_data.distance, bind_data.directed,
-	                              bind_data.equicost);
+	state->rows = DrivingDistance(edges, bind_data.starts, bind_data.distance, bind_data.directed, bind_data.equicost);
 	return std::move(state);
 }
 
@@ -248,7 +247,6 @@ void DrivingDistanceScan(ClientContext &, TableFunctionInput &data, DataChunk &o
 	}
 	state.offset += count;
 }
-
 
 // --- dijkstra_via -----------------------------------------------------------
 
@@ -277,8 +275,7 @@ duckdb::unique_ptr<GlobalTableFunctionState> ViaInit(ClientContext &context, Tab
 	auto &bind_data = input.bind_data->Cast<RoutingBindData>();
 	auto state = duckdb::make_uniq<RoutingGlobalState<ViaRow>>();
 	auto edges = LoadEdges(context, bind_data.edges_sql);
-	state->rows = DijkstraVia(edges, bind_data.via, bind_data.directed, bind_data.strict,
-	                          bind_data.u_turn_on_edge);
+	state->rows = DijkstraVia(edges, bind_data.via, bind_data.directed, bind_data.strict, bind_data.u_turn_on_edge);
 	return std::move(state);
 }
 
@@ -374,9 +371,9 @@ duckdb::unique_ptr<FunctionData> KspBind(ClientContext &, TableFunctionBindInput
 	bind_data->heap_paths = NamedFlag(input, "heap_paths", false);
 
 	names = {"seq", "path_id", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
-	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
-	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE,
-	                LogicalType::DOUBLE};
+	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+	                LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
 	return std::move(bind_data);
 }
 
@@ -384,8 +381,7 @@ duckdb::unique_ptr<GlobalTableFunctionState> KspInit(ClientContext &context, Tab
 	auto &bind_data = input.bind_data->Cast<RoutingBindData>();
 	auto state = duckdb::make_uniq<RoutingGlobalState<KspRow>>();
 	auto edges = LoadEdges(context, bind_data.edges_sql);
-	state->rows = Ksp(edges, bind_data.starts, bind_data.ends, bind_data.k, bind_data.directed,
-	                  bind_data.heap_paths);
+	state->rows = Ksp(edges, bind_data.starts, bind_data.ends, bind_data.k, bind_data.directed, bind_data.heap_paths);
 	return std::move(state);
 }
 
@@ -474,8 +470,7 @@ TableFunctionSet GetDrivingDistanceFunction() {
 	TableFunctionSet set("duckrouting_driving_distance");
 	for (size_t start_shape = 0; start_shape < 2; start_shape++) {
 		for (size_t with_flag = 0; with_flag < 2; with_flag++) {
-			duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, VidTypes(start_shape),
-			                                       LogicalType::DOUBLE};
+			duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, VidTypes(start_shape), LogicalType::DOUBLE};
 			if (with_flag) {
 				arguments.push_back(LogicalType::BOOLEAN);
 			}
@@ -551,8 +546,8 @@ TableFunctionSet GetKspFunction() {
 	for (size_t start_shape = 0; start_shape < 2; start_shape++) {
 		for (size_t end_shape = 0; end_shape < 2; end_shape++) {
 			for (size_t with_flag = 0; with_flag < 2; with_flag++) {
-				duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, VidTypes(start_shape),
-				                                       VidTypes(end_shape), LogicalType::BIGINT};
+				duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, VidTypes(start_shape), VidTypes(end_shape),
+				                                       LogicalType::BIGINT};
 				if (with_flag) {
 					arguments.push_back(LogicalType::BOOLEAN);
 				}

@@ -21,8 +21,8 @@ inline void DuckroutingVersionScalarFun(DataChunk &args, ExpressionState &state,
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
-	auto duckrouting_version_scalar_function =
-	    ScalarFunction("duckrouting_version", {LogicalType::VARCHAR}, LogicalType::VARCHAR, DuckroutingVersionScalarFun);
+	auto duckrouting_version_scalar_function = ScalarFunction("duckrouting_version", {LogicalType::VARCHAR},
+	                                                          LogicalType::VARCHAR, DuckroutingVersionScalarFun);
 	loader.RegisterFunction(duckrouting_version_scalar_function);
 
 	loader.RegisterFunction(duckrouting::GetDijkstraFunction());

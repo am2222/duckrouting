@@ -1,6 +1,7 @@
 # name: test/sql/astar.test
 # description: A* family vs pgRouting output
-# group: [duckrouting]
+# group: [sql]
+
 #
 # Expected results from pgRouting docqueries/astar/. The edges query needs
 # x1, y1, x2, y2 so the heuristic can estimate remaining distance; coordinates

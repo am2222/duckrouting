@@ -1,6 +1,7 @@
 # name: test/sql/analysis.test
 # description: colouring, planarity, metrics, min cut, circuits and dominator tree
-# group: [duckrouting]
+# group: [sql]
+
 #
 # Expected results from pgRouting docqueries/coloring/, planar/, metrics/,
 # mincut/, circuits/ and dominator/.

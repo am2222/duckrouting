@@ -18,8 +18,7 @@ namespace {
 //! The edges of the input, sorted so results are reproducible.
 std::vector<EdgeRow> Sorted(const std::vector<EdgeRow> &edges) {
 	std::vector<EdgeRow> ordered(edges);
-	std::stable_sort(ordered.begin(), ordered.end(),
-	                 [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
+	std::stable_sort(ordered.begin(), ordered.end(), [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
 	return ordered;
 }
 
@@ -142,8 +141,7 @@ namespace {
 //! Hierholzer's algorithm: walk the graph consuming edges, splicing in
 //! detours whenever the walk returns to a vertex with unused edges.
 std::vector<std::pair<int64_t, size_t>> EulerianCircuit(const std::vector<EdgeRow> &edges,
-                                                        const std::vector<size_t> &multiplicity,
-                                                        int64_t start) {
+                                                        const std::vector<size_t> &multiplicity, int64_t start) {
 	std::map<int64_t, std::vector<std::pair<int64_t, size_t>>> adjacency;
 	std::vector<size_t> remaining(edges.size());
 	for (size_t i = 0; i < edges.size(); i++) {
@@ -223,8 +221,7 @@ std::vector<size_t> Multiplicities(const std::vector<EdgeRow> &edges, double &ad
 				continue;
 			}
 			SimplePath path;
-			if (!ConstrainedShortestPath(adjacency, source, sink, std::set<uint64_t>(), std::set<ArcKey>(),
-			                             path)) {
+			if (!ConstrainedShortestPath(adjacency, source, sink, std::set<uint64_t>(), std::set<ArcKey>(), path)) {
 				continue;
 			}
 			if (!found || path.cost < best) {
@@ -316,7 +313,6 @@ double ChinesePostmanCost(const std::vector<EdgeRow> &edges, bool directed) {
 	return rows.empty() ? 0 : rows.back().agg_cost;
 }
 
-
 // ---------------------------------------------------------------------------
 // DuckDB table function bindings
 // ---------------------------------------------------------------------------
@@ -391,8 +387,7 @@ duckdb::unique_ptr<FunctionData> TransformBind(ClientContext &, TableFunctionBin
 }
 
 template <bool Full>
-duckdb::unique_ptr<GlobalTableFunctionState> TransformInit(ClientContext &context,
-                                                           TableFunctionInitInput &input) {
+duckdb::unique_ptr<GlobalTableFunctionState> TransformInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<TransformBindData>();
 	auto state = duckdb::make_uniq<TransformState<TransformedEdgeRow>>();
 	auto edges = LoadEdges(context, bind_data.edges_sql);
@@ -463,8 +458,7 @@ duckdb::unique_ptr<FunctionData> PostmanCostBind(ClientContext &, TableFunctionB
 	return std::move(bind_data);
 }
 
-duckdb::unique_ptr<GlobalTableFunctionState> PostmanCostInit(ClientContext &context,
-                                                             TableFunctionInitInput &input) {
+duckdb::unique_ptr<GlobalTableFunctionState> PostmanCostInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<TransformBindData>();
 	auto state = duckdb::make_uniq<TransformState<Value>>();
 	state->rows.push_back(
@@ -482,9 +476,8 @@ void PostmanCostScan(ClientContext &, TableFunctionInput &data, DataChunk &outpu
 	state.offset += count;
 }
 
-TableFunctionSet EdgesOnlySet(const char *name, duckdb::table_function_t scan,
-                              duckdb::table_function_bind_t bind, duckdb::table_function_init_global_t init,
-                              bool accepts_directed) {
+TableFunctionSet EdgesOnlySet(const char *name, duckdb::table_function_t scan, duckdb::table_function_bind_t bind,
+                              duckdb::table_function_init_global_t init, bool accepts_directed) {
 	TableFunctionSet set(name);
 	const size_t variants = accepts_directed ? 2u : 1u;
 	for (size_t with_flag = 0; with_flag < variants; with_flag++) {
@@ -504,19 +497,18 @@ TableFunctionSet EdgesOnlySet(const char *name, duckdb::table_function_t scan,
 } // namespace
 
 TableFunctionSet GetLineGraphFunction() {
-	return EdgesOnlySet("duckrouting_line_graph", TransformScan<false>, TransformBind<false>,
-	                    TransformInit<false>, true);
+	return EdgesOnlySet("duckrouting_line_graph", TransformScan<false>, TransformBind<false>, TransformInit<false>,
+	                    true);
 }
 TableFunctionSet GetLineGraphFullFunction() {
-	return EdgesOnlySet("duckrouting_line_graph_full", TransformScan<true>, TransformBind<true>,
-	                    TransformInit<true>, false);
+	return EdgesOnlySet("duckrouting_line_graph_full", TransformScan<true>, TransformBind<true>, TransformInit<true>,
+	                    false);
 }
 TableFunctionSet GetChinesePostmanFunction() {
 	return EdgesOnlySet("duckrouting_chinese_postman", PostmanScan, PostmanBind, PostmanInit, true);
 }
 TableFunctionSet GetChinesePostmanCostFunction() {
-	return EdgesOnlySet("duckrouting_chinese_postman_cost", PostmanCostScan, PostmanCostBind, PostmanCostInit,
-	                    true);
+	return EdgesOnlySet("duckrouting_chinese_postman_cost", PostmanCostScan, PostmanCostBind, PostmanCostInit, true);
 }
 
 } // namespace duckrouting

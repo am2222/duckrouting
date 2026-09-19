@@ -54,7 +54,7 @@ bool ConstrainedShortestPath(const Adjacency &adjacency, uint64_t source, uint64
 	std::vector<bool> settled(adjacency.size(), false);
 
 	typedef std::pair<double, uint64_t> Entry;
-	std::priority_queue<Entry, std::vector<Entry>, std::greater<Entry> > queue;
+	std::priority_queue<Entry, std::vector<Entry>, std::greater<Entry>> queue;
 	distance[source] = 0;
 	parent[source] = source;
 	queue.push(Entry(0, source));

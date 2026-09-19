@@ -31,14 +31,14 @@ typedef std::vector<std::vector<ContractionArc>> ContractionAdjacency;
 //! distance exceeds `limit`. Used as the witness search: if a route already
 //! exists that is no worse than going through the vertex being contracted,
 //! no shortcut is needed.
-bool WitnessExists(const ContractionAdjacency &outgoing, const std::vector<bool> &removed, uint64_t from,
-                   uint64_t to, uint64_t banned, double limit) {
+bool WitnessExists(const ContractionAdjacency &outgoing, const std::vector<bool> &removed, uint64_t from, uint64_t to,
+                   uint64_t banned, double limit) {
 	if (from == to) {
 		return true;
 	}
 	std::vector<double> distance(outgoing.size(), std::numeric_limits<double>::infinity());
 	typedef std::pair<double, uint64_t> Entry;
-	std::priority_queue<Entry, std::vector<Entry>, std::greater<Entry> > queue;
+	std::priority_queue<Entry, std::vector<Entry>, std::greater<Entry>> queue;
 	distance[from] = 0;
 	queue.push(Entry(0, from));
 
@@ -85,9 +85,8 @@ bool BestArc(const ContractionAdjacency &adjacency, uint64_t from, uint64_t to, 
 //! The shortcuts contracting `vertex` would require. Returning them without
 //! applying them is what lets the same routine serve both the priority
 //! calculation and the contraction itself.
-std::vector<ContractionArc> ShortcutsFor(const ContractionAdjacency &outgoing,
-                                         const ContractionAdjacency &incoming, const std::vector<bool> &removed,
-                                         const VertexIndex &index, uint64_t vertex,
+std::vector<ContractionArc> ShortcutsFor(const ContractionAdjacency &outgoing, const ContractionAdjacency &incoming,
+                                         const std::vector<bool> &removed, const VertexIndex &index, uint64_t vertex,
                                          std::vector<uint64_t> &shortcut_sources) {
 	std::vector<ContractionArc> shortcuts;
 	shortcut_sources.clear();
@@ -160,8 +159,7 @@ int64_t CountIncident(const ContractionAdjacency &outgoing, const ContractionAdj
 std::vector<ContractionRow> ContractionHierarchies(const std::vector<EdgeRow> &edges, bool directed,
                                                    const std::vector<int64_t> &forbidden) {
 	std::vector<EdgeRow> ordered(edges);
-	std::stable_sort(ordered.begin(), ordered.end(),
-	                 [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
+	std::stable_sort(ordered.begin(), ordered.end(), [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
 
 	VertexIndex index;
 	for (size_t i = 0; i < ordered.size(); i++) {
@@ -231,8 +229,8 @@ std::vector<ContractionRow> ContractionHierarchies(const std::vector<EdgeRow> &e
 			}
 			std::vector<uint64_t> sources;
 			auto shortcuts = ShortcutsFor(outgoing, incoming, removed, index, v, sources);
-			const double score =
-			    static_cast<double>(shortcuts.size()) - static_cast<double>(CountIncident(outgoing, incoming, removed, v));
+			const double score = static_cast<double>(shortcuts.size()) -
+			                     static_cast<double>(CountIncident(outgoing, incoming, removed, v));
 			if (!contracted_any || score < best_score) {
 				contracted_any = true;
 				best_score = score;
@@ -257,10 +255,9 @@ std::vector<ContractionRow> ContractionHierarchies(const std::vector<EdgeRow> &e
 			// An undirected contraction produces the same shortcut in both
 			// directions; pgRouting reports each one once.
 			if (!directed) {
-				const std::pair<uint64_t, uint64_t> key =
-				    best_sources[i] < best_shortcuts[i].to
-				        ? std::make_pair(best_sources[i], best_shortcuts[i].to)
-				        : std::make_pair(best_shortcuts[i].to, best_sources[i]);
+				const std::pair<uint64_t, uint64_t> key = best_sources[i] < best_shortcuts[i].to
+				                                              ? std::make_pair(best_sources[i], best_shortcuts[i].to)
+				                                              : std::make_pair(best_shortcuts[i].to, best_sources[i]);
 				if (reported.count(key)) {
 					continue;
 				}
@@ -296,12 +293,10 @@ std::vector<ContractionRow> ContractionHierarchies(const std::vector<EdgeRow> &e
 		row.vertex_order = order[v];
 		rows.push_back(row);
 	}
-	std::sort(rows.begin(), rows.end(),
-	          [](const ContractionRow &a, const ContractionRow &b) { return a.id < b.id; });
+	std::sort(rows.begin(), rows.end(), [](const ContractionRow &a, const ContractionRow &b) { return a.id < b.id; });
 	rows.insert(rows.end(), shortcut_rows.begin(), shortcut_rows.end());
 	return rows;
 }
-
 
 // ---------------------------------------------------------------------------
 // DuckDB table function bindings
@@ -386,14 +381,13 @@ duckdb::unique_ptr<FunctionData> ContractionBind(ClientContext &, TableFunctionB
 	}
 
 	names = {"type", "id", "contracted_vertices", "source", "target", "cost", "metric", "vertex_order"};
-	return_types = {LogicalType::VARCHAR,          LogicalType::BIGINT, LogicalType::LIST(LogicalType::BIGINT),
-	                LogicalType::BIGINT,           LogicalType::BIGINT, LogicalType::DOUBLE,
-	                LogicalType::BIGINT,           LogicalType::BIGINT};
+	return_types = {LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::LIST(LogicalType::BIGINT),
+	                LogicalType::BIGINT,  LogicalType::BIGINT, LogicalType::DOUBLE,
+	                LogicalType::BIGINT,  LogicalType::BIGINT};
 	return std::move(bind_data);
 }
 
-duckdb::unique_ptr<GlobalTableFunctionState> ContractionInit(ClientContext &context,
-                                                             TableFunctionInitInput &input) {
+duckdb::unique_ptr<GlobalTableFunctionState> ContractionInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<ContractionBindData>();
 	auto state = duckdb::make_uniq<ContractionGlobalState<ContractionRow>>();
 	auto edges = LoadEdges(context, bind_data.edges_sql);
@@ -465,14 +459,13 @@ duckdb::unique_ptr<FunctionData> WithPointsBind(ClientContext &, TableFunctionBi
 	return std::move(bind_data);
 }
 
-duckdb::unique_ptr<GlobalTableFunctionState> WithPointsInit(ClientContext &context,
-                                                            TableFunctionInitInput &input) {
+duckdb::unique_ptr<GlobalTableFunctionState> WithPointsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<ContractionBindData>();
 	auto state = duckdb::make_uniq<ContractionGlobalState<DrivingDistanceRow>>();
 	auto edges = LoadEdges(context, bind_data.edges_sql);
 	auto points = LoadPointsOnEdges(context, bind_data.points_sql);
-	state->rows = WithPointsDrivingDistance(edges, points, bind_data.starts, bind_data.distance,
-	                                        bind_data.driving_side, bind_data.directed, bind_data.details);
+	state->rows = WithPointsDrivingDistance(edges, points, bind_data.starts, bind_data.distance, bind_data.driving_side,
+	                                        bind_data.directed, bind_data.details);
 	return std::move(state);
 }
 
@@ -517,8 +510,7 @@ TableFunctionSet GetWithPointsDDFunction() {
 	for (size_t start_is_list = 0; start_is_list < 2; start_is_list++) {
 		for (size_t with_side = 0; with_side < 2; with_side++) {
 			duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, LogicalType::VARCHAR,
-			                                       start_is_list ? list : LogicalType::BIGINT,
-			                                       LogicalType::DOUBLE};
+			                                       start_is_list ? list : LogicalType::BIGINT, LogicalType::DOUBLE};
 			if (with_side) {
 				arguments.push_back(LogicalType::VARCHAR);
 			}

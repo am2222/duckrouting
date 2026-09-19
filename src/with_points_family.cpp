@@ -173,12 +173,10 @@ duckdb::unique_ptr<FunctionData> PairBind(ClientContext &, TableFunctionBindInpu
 	return std::move(bind_data);
 }
 
-duckdb::unique_ptr<GlobalTableFunctionState> WithPointsInit(ClientContext &context,
-                                                            TableFunctionInitInput &input) {
+duckdb::unique_ptr<GlobalTableFunctionState> WithPointsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<WithPointsBindData>();
 	auto state = duckdb::make_uniq<WithPointsState<PathRow>>();
-	auto rows = Dijkstra(PreparedGraph(context, bind_data), bind_data.starts, bind_data.ends,
-	                     bind_data.directed);
+	auto rows = Dijkstra(PreparedGraph(context, bind_data), bind_data.starts, bind_data.ends, bind_data.directed);
 	if (!bind_data.details) {
 		// Only the points the caller asked about stay visible.
 		std::vector<int64_t> visible(bind_data.starts);
@@ -189,12 +187,10 @@ duckdb::unique_ptr<GlobalTableFunctionState> WithPointsInit(ClientContext &conte
 	return std::move(state);
 }
 
-duckdb::unique_ptr<GlobalTableFunctionState> WithPointsCostInit(ClientContext &context,
-                                                                TableFunctionInitInput &input) {
+duckdb::unique_ptr<GlobalTableFunctionState> WithPointsCostInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<WithPointsBindData>();
 	auto state = duckdb::make_uniq<WithPointsState<CostRow>>();
-	state->rows = DijkstraCost(PreparedGraph(context, bind_data), bind_data.starts, bind_data.ends,
-	                           bind_data.directed);
+	state->rows = DijkstraCost(PreparedGraph(context, bind_data), bind_data.starts, bind_data.ends, bind_data.directed);
 	return std::move(state);
 }
 
@@ -231,8 +227,8 @@ duckdb::unique_ptr<FunctionData> ViaBind(ClientContext &, TableFunctionBindInput
 duckdb::unique_ptr<GlobalTableFunctionState> ViaInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<WithPointsBindData>();
 	auto state = duckdb::make_uniq<WithPointsState<ViaRow>>();
-	state->rows = DijkstraVia(PreparedGraph(context, bind_data), bind_data.via, bind_data.directed,
-	                          bind_data.strict, bind_data.u_turn_on_edge);
+	state->rows = DijkstraVia(PreparedGraph(context, bind_data), bind_data.via, bind_data.directed, bind_data.strict,
+	                          bind_data.u_turn_on_edge);
 	return std::move(state);
 }
 
@@ -273,9 +269,9 @@ duckdb::unique_ptr<FunctionData> KspBind(ClientContext &, TableFunctionBindInput
 	}
 	ReadCommon(input, *bind_data, 5);
 	names = {"seq", "path_id", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
-	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
-	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE,
-	                LogicalType::DOUBLE};
+	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+	                LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
 	return std::move(bind_data);
 }
 
@@ -396,8 +392,7 @@ TableFunctionSet GetWithPointsKspFunction() {
 			for (size_t with_side = 0; with_side < 2; with_side++) {
 				duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, LogicalType::VARCHAR,
 				                                       start_is_list ? list : LogicalType::BIGINT,
-				                                       end_is_list ? list : LogicalType::BIGINT,
-				                                       LogicalType::BIGINT};
+				                                       end_is_list ? list : LogicalType::BIGINT, LogicalType::BIGINT};
 				if (with_side) {
 					arguments.push_back(LogicalType::VARCHAR);
 				}

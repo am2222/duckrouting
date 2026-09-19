@@ -1,6 +1,6 @@
 # name: test/sql/transform.test
 # description: line graph and Chinese postman
-# group: [duckrouting]
+# group: [sql]
 
 require duckrouting
 

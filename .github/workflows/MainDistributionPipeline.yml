@@ -20,6 +20,11 @@ jobs:
       ci_tools_version: v1.5-variegata
       extension_name: duckrouting
 
+  # Only `format` here, not `format;tidy`. The tidy job in _extension_code_quality.yml
+  # checks out the repo and runs cmake without setting up vcpkg, so
+  # `find_package(boost_graph)` cannot resolve and configuration fails before
+  # clang-tidy ever runs. Extensions that vendor their dependencies are unaffected;
+  # one that takes a vcpkg dependency, as this does, cannot pass that job.
   code-quality-check:
     name: Code Quality Check
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@v1.5-variegata
@@ -27,4 +32,16 @@ jobs:
       duckdb_version: v1.5.4
       ci_tools_version: v1.5-variegata
       extension_name: duckrouting
-      format_checks: 'format;tidy'
+      format_checks: 'format'
+
+  # Canary build against the upcoming DuckDB v2. community-extensions builds every
+  # extension against this same branch, so a failure here is one that would show up
+  # there. Artifacts get a postfix so they are distinguishable from the v1.5.4 ones.
+  duckdb-next-build:
+    name: Build extension binaries (DuckDB v2 canary)
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    with:
+      duckdb_version: v2.0-cyanoptera
+      ci_tools_version: main
+      extension_name: duckrouting
+      artifact_postfix: -duckdb-next

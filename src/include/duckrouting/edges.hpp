@@ -51,8 +51,8 @@ inline bool IsTraversable(double cost) {
 //! A few functions never report an edge back -- pgRouting's johnson and
 //! floydWarshall are documented with `SELECT source, target, cost` -- so `id`
 //! can be made optional, in which case row numbers stand in for it.
-std::vector<EdgeRow> LoadEdges(duckdb::ClientContext &context, const std::string &edges_sql,
-                               bool require_id = true, bool require_cost = true);
+std::vector<EdgeRow> LoadEdges(duckdb::ClientContext &context, const std::string &edges_sql, bool require_id = true,
+                               bool require_cost = true);
 
 //! One row of a flow query. The flow functions want capacities rather than
 //! costs, and the min-cost variant wants both. A negative or missing value
@@ -84,8 +84,7 @@ struct CoordinateEdgeRow {
 };
 
 //! Runs `edges_sql` and reads the usual columns plus x1, y1, x2, y2.
-std::vector<CoordinateEdgeRow> LoadCoordinateEdges(duckdb::ClientContext &context,
-                                                   const std::string &edges_sql);
+std::vector<CoordinateEdgeRow> LoadCoordinateEdges(duckdb::ClientContext &context, const std::string &edges_sql);
 
 //! One cell of a cost matrix, as produced by the *CostMatrix functions.
 struct MatrixCell {
@@ -119,5 +118,15 @@ struct PointOnEdge {
 
 //! Reads a query exposing pid, edge_id, fraction and the optional side.
 std::vector<PointOnEdge> LoadPointsOnEdges(duckdb::ClientContext &context, const std::string &points_sql);
+
+//! A turn restriction: following this exact sequence of edges costs extra. A
+//! large cost effectively forbids the turn.
+struct Restriction {
+	std::vector<int64_t> path;
+	double cost;
+};
+
+//! Reads a query exposing path (a BIGINT[] of edge ids) and cost.
+std::vector<Restriction> LoadRestrictions(duckdb::ClientContext &context, const std::string &restrictions_sql);
 
 } // namespace duckrouting

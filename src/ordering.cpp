@@ -51,8 +51,7 @@ namespace {
 typedef boost::adjacency_list<
     boost::vecS, boost::vecS, boost::undirectedS,
     boost::property<boost::vertex_color_t, boost::default_color_type,
-                    boost::property<boost::vertex_degree_t, int,
-                                    boost::property<boost::vertex_priority_t, double>>>>
+                    boost::property<boost::vertex_degree_t, int, boost::property<boost::vertex_priority_t, double>>>>
     OrderingGraph;
 
 OrderingGraph BuildOrderingGraph(const std::vector<EdgeRow> &edges, VertexIndex &index) {
@@ -86,10 +85,9 @@ std::vector<IdentifierRow> VertexOrdering(const std::vector<EdgeRow> &edges, Ord
 		std::vector<boost::default_color_type> color(boost::num_vertices(graph));
 		std::vector<DirectedGraph::vertex_descriptor> order;
 		try {
-			boost::topological_sort(
-			    graph, std::back_inserter(order),
-			    boost::color_map(boost::make_iterator_property_map(color.begin(),
-			                                                       boost::get(boost::vertex_index, graph))));
+			boost::topological_sort(graph, std::back_inserter(order),
+			                        boost::color_map(boost::make_iterator_property_map(
+			                            color.begin(), boost::get(boost::vertex_index, graph))));
 		} catch (const boost::not_a_dag &) {
 			throw duckdb::InvalidInputException(
 			    "duckrouting_topological_sort: the graph contains a cycle, so it is not a DAG");

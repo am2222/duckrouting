@@ -33,11 +33,9 @@ typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS, boos
 
 //! Builds the structural undirected graph, recording which edge id each Boost
 //! edge came from so results can be reported in the user's own terms.
-PlainGraph BuildPlainGraph(const std::vector<EdgeRow> &edges, VertexIndex &index,
-                           std::vector<int64_t> &edge_ids) {
+PlainGraph BuildPlainGraph(const std::vector<EdgeRow> &edges, VertexIndex &index, std::vector<int64_t> &edge_ids) {
 	std::vector<EdgeRow> ordered(edges);
-	std::stable_sort(ordered.begin(), ordered.end(),
-	                 [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
+	std::stable_sort(ordered.begin(), ordered.end(), [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
 	for (size_t i = 0; i < ordered.size(); i++) {
 		index.GetOrCreate(ordered[i].source);
 		index.GetOrCreate(ordered[i].target);
@@ -104,8 +102,7 @@ std::vector<ColorRow> Bipartite(const std::vector<EdgeRow> &edges) {
 	auto graph = BuildPlainGraph(edges, index, edge_ids);
 
 	std::vector<boost::default_color_type> partition(boost::num_vertices(graph));
-	auto partition_map =
-	    boost::make_iterator_property_map(partition.begin(), boost::get(boost::vertex_index, graph));
+	auto partition_map = boost::make_iterator_property_map(partition.begin(), boost::get(boost::vertex_index, graph));
 
 	if (!boost::is_bipartite(graph, boost::get(boost::vertex_index, graph), partition_map)) {
 		// pgRouting reports a non-bipartite graph as an empty result.
@@ -115,9 +112,7 @@ std::vector<ColorRow> Bipartite(const std::vector<EdgeRow> &edges) {
 	std::vector<ColorRow> rows;
 	for (uint64_t v = 0; v < index.Size(); v++) {
 		rows.push_back(
-		    ColorRow {index.IdOf(v), partition[v] == boost::color_traits<boost::default_color_type>::white()
-		                                 ? 0
-		                                 : 1});
+		    ColorRow {index.IdOf(v), partition[v] == boost::color_traits<boost::default_color_type>::white() ? 0 : 1});
 	}
 	std::sort(rows.begin(), rows.end(), [](const ColorRow &a, const ColorRow &b) { return a.id < b.id; });
 	return rows;
@@ -137,8 +132,7 @@ std::vector<PairRow> BoyerMyrvold(const std::vector<EdgeRow> &edges) {
 
 	typedef std::vector<boost::graph_traits<PlainGraph>::edge_descriptor> Rotation;
 	std::vector<Rotation> embedding(boost::num_vertices(graph));
-	auto embedding_map =
-	    boost::make_iterator_property_map(embedding.begin(), boost::get(boost::vertex_index, graph));
+	auto embedding_map = boost::make_iterator_property_map(embedding.begin(), boost::get(boost::vertex_index, graph));
 
 	if (!boost::boyer_myrvold_planarity_test(boost::boyer_myrvold_params::graph = graph,
 	                                         boost::boyer_myrvold_params::embedding = embedding_map)) {
@@ -174,15 +168,15 @@ std::vector<CentralityRow> BetweennessCentrality(const std::vector<EdgeRow> &edg
 		auto graph = BuildGraph<DirectedGraph>(edges, index);
 		centrality.assign(boost::num_vertices(graph), 0);
 		boost::brandes_betweenness_centrality(
-		    graph, boost::centrality_map(boost::make_iterator_property_map(
-		                                     centrality.begin(), boost::get(boost::vertex_index, graph)))
+		    graph, boost::centrality_map(
+		               boost::make_iterator_property_map(centrality.begin(), boost::get(boost::vertex_index, graph)))
 		               .weight_map(boost::get(&RoutingEdge::cost, graph)));
 	} else {
 		auto graph = BuildGraph<UndirectedGraph>(edges, index);
 		centrality.assign(boost::num_vertices(graph), 0);
 		boost::brandes_betweenness_centrality(
-		    graph, boost::centrality_map(boost::make_iterator_property_map(
-		                                     centrality.begin(), boost::get(boost::vertex_index, graph)))
+		    graph, boost::centrality_map(
+		               boost::make_iterator_property_map(centrality.begin(), boost::get(boost::vertex_index, graph)))
 		               .weight_map(boost::get(&RoutingEdge::cost, graph)));
 	}
 
@@ -198,8 +192,7 @@ std::vector<CentralityRow> BetweennessCentrality(const std::vector<EdgeRow> &edg
 	for (uint64_t v = 0; v < index.Size(); v++) {
 		rows.push_back(CentralityRow {index.IdOf(v), centrality[v] * factor});
 	}
-	std::sort(rows.begin(), rows.end(),
-	          [](const CentralityRow &a, const CentralityRow &b) { return a.vid < b.vid; });
+	std::sort(rows.begin(), rows.end(), [](const CentralityRow &a, const CentralityRow &b) { return a.vid < b.vid; });
 	return rows;
 }
 
@@ -211,8 +204,7 @@ std::vector<MinCutRow> StoerWagner(const std::vector<EdgeRow> &edges) {
 	    CutGraph;
 
 	std::vector<EdgeRow> ordered(edges);
-	std::stable_sort(ordered.begin(), ordered.end(),
-	                 [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
+	std::stable_sort(ordered.begin(), ordered.end(), [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
 
 	VertexIndex index;
 	for (size_t i = 0; i < ordered.size(); i++) {
@@ -341,8 +333,7 @@ std::vector<CircuitRow> HawickCircuits(const std::vector<EdgeRow> &edges) {
 std::vector<DominatorRow> DominatorTree(const std::vector<EdgeRow> &edges, int64_t root) {
 	// The dominator tree walks backwards from each vertex, so it needs a graph
 	// that stores in-edges as well as out-edges.
-	typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::bidirectionalS, boost::no_property,
-	                              RoutingEdge>
+	typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::bidirectionalS, boost::no_property, RoutingEdge>
 	    BidirectionalGraph;
 
 	VertexIndex index;
@@ -356,8 +347,7 @@ std::vector<DominatorRow> DominatorTree(const std::vector<EdgeRow> &edges, int64
 	const uint64_t none = boost::graph_traits<BidirectionalGraph>::null_vertex();
 	std::vector<uint64_t> dominator(boost::num_vertices(graph), none);
 	boost::lengauer_tarjan_dominator_tree(
-	    graph, source,
-	    boost::make_iterator_property_map(dominator.begin(), boost::get(boost::vertex_index, graph)));
+	    graph, source, boost::make_iterator_property_map(dominator.begin(), boost::get(boost::vertex_index, graph)));
 
 	std::vector<DominatorRow> rows;
 	for (uint64_t v = 0; v < index.Size(); v++) {
@@ -370,7 +360,6 @@ std::vector<DominatorRow> DominatorTree(const std::vector<EdgeRow> &edges, int64
 	          [](const DominatorRow &a, const DominatorRow &b) { return a.vertex_id < b.vertex_id; });
 	return rows;
 }
-
 
 // ---------------------------------------------------------------------------
 // DuckDB table function bindings
@@ -527,8 +516,7 @@ duckdb::unique_ptr<FunctionData> CentralityBind(ClientContext &, TableFunctionBi
 	return std::move(bind_data);
 }
 
-duckdb::unique_ptr<GlobalTableFunctionState> CentralityInit(ClientContext &context,
-                                                            TableFunctionInitInput &input) {
+duckdb::unique_ptr<GlobalTableFunctionState> CentralityInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<AnalysisBindData>();
 	auto state = duckdb::make_uniq<AnalysisGlobalState<CentralityRow>>();
 	state->rows = BetweennessCentrality(LoadEdges(context, bind_data.edges_sql), bind_data.directed);
@@ -586,9 +574,9 @@ duckdb::unique_ptr<FunctionData> CircuitBind(ClientContext &, TableFunctionBindI
 	auto bind_data = duckdb::make_uniq<AnalysisBindData>();
 	ReadEdges(input, *bind_data);
 	names = {"seq", "path_id", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
-	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
-	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE,
-	                LogicalType::DOUBLE};
+	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+	                LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
 	return std::move(bind_data);
 }
 
@@ -670,8 +658,7 @@ TableFunctionSet GetSequentialVertexColoringFunction() {
 }
 
 TableFunctionSet GetEdgeColoringFunction() {
-	return OneArgSet("duckrouting_edge_coloring", ColorScan, PairBind<kEdgeName, kColorName>,
-	                 ColorInit<EdgeColoring>);
+	return OneArgSet("duckrouting_edge_coloring", ColorScan, PairBind<kEdgeName, kColorName>, ColorInit<EdgeColoring>);
 }
 
 TableFunctionSet GetBipartiteFunction() {

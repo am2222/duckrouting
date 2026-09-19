@@ -1,6 +1,7 @@
 # name: test/sql/geometry.test
 # description: the geometry helpers, which need DuckDB's spatial extension
-# group: [duckrouting]
+# group: [sql]
+
 #
 # These three are pure SQL in pgRouting too -- they ask geometry questions, not
 # graph ones. duckrouting registers them as table macros, so spatial is only

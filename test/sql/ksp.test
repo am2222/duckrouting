@@ -1,6 +1,7 @@
 # name: test/sql/ksp.test
 # description: duckrouting_ksp (Yen's k shortest loopless paths) vs pgRouting
-# group: [duckrouting]
+# group: [sql]
+
 #
 # Expected results from pgRouting docqueries/ksp/ksp.result. KSP is the one
 # function in this family that is NOT a Boost algorithm -- Boost has no

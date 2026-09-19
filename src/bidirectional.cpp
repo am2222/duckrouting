@@ -82,8 +82,8 @@ struct Frontier {
 
 //! Advances one frontier by a single vertex. Returns the vertex settled, or
 //! false when that side is exhausted.
-bool Step(Frontier &frontier, const Adjacency &adjacency, const std::vector<Placement> &placement,
-          Heuristic heuristic, double factor, uint64_t goal, uint64_t &settled_vertex) {
+bool Step(Frontier &frontier, const Adjacency &adjacency, const std::vector<Placement> &placement, Heuristic heuristic,
+          double factor, uint64_t goal, uint64_t &settled_vertex) {
 	while (!frontier.queue.empty()) {
 		const uint64_t at = frontier.queue.top().second;
 		frontier.queue.pop();
@@ -103,8 +103,8 @@ bool Step(Frontier &frontier, const Adjacency &adjacency, const std::vector<Plac
 				frontier.parent_cost[arc.to] = arc.cost;
 				// The heuristic only orders the queue; the stored distance
 				// stays the true cost so the meeting test remains correct.
-				frontier.queue.push(std::make_pair(
-				    candidate + Estimate(placement, arc.to, goal, heuristic, factor), arc.to));
+				frontier.queue.push(
+				    std::make_pair(candidate + Estimate(placement, arc.to, goal, heuristic, factor), arc.to));
 			}
 		}
 		return true;
@@ -246,8 +246,7 @@ void RunBidirectional(const std::vector<EdgeRow> &edges, const std::vector<Place
                       std::vector<CostRow> *costs_out) {
 	VertexIndex index;
 	std::vector<EdgeRow> ordered(edges);
-	std::stable_sort(ordered.begin(), ordered.end(),
-	                 [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
+	std::stable_sort(ordered.begin(), ordered.end(), [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
 	const Adjacency forward = BuildAdjacency(ordered, index, directed);
 	const Adjacency backward = Reverse(forward);
 
@@ -320,28 +319,26 @@ std::vector<Placement> PlacementsFrom(const std::vector<CoordinateEdgeRow> &edge
 std::vector<PathRow> BidirectionalDijkstra(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
                                            const std::vector<int64_t> &ends, bool directed) {
 	std::vector<PathRow> rows;
-	RunBidirectional(edges, std::vector<Placement>(), Normalized(starts), Normalized(ends), directed,
-	                 Heuristic::None, 1.0, &rows, nullptr);
+	RunBidirectional(edges, std::vector<Placement>(), Normalized(starts), Normalized(ends), directed, Heuristic::None,
+	                 1.0, &rows, nullptr);
 	return rows;
 }
 
-std::vector<CostRow> BidirectionalDijkstraCost(const std::vector<EdgeRow> &edges,
-                                               const std::vector<int64_t> &starts,
+std::vector<CostRow> BidirectionalDijkstraCost(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
                                                const std::vector<int64_t> &ends, bool directed) {
 	std::vector<CostRow> rows;
-	RunBidirectional(edges, std::vector<Placement>(), Normalized(starts), Normalized(ends), directed,
-	                 Heuristic::None, 1.0, nullptr, &rows);
+	RunBidirectional(edges, std::vector<Placement>(), Normalized(starts), Normalized(ends), directed, Heuristic::None,
+	                 1.0, nullptr, &rows);
 	return rows;
 }
 
-std::vector<PathRow> BidirectionalAStar(const std::vector<CoordinateEdgeRow> &edges,
-                                        const std::vector<int64_t> &starts, const std::vector<int64_t> &ends,
-                                        const AStarOptions &options) {
+std::vector<PathRow> BidirectionalAStar(const std::vector<CoordinateEdgeRow> &edges, const std::vector<int64_t> &starts,
+                                        const std::vector<int64_t> &ends, const AStarOptions &options) {
 	std::vector<EdgeRow> plain;
 	const auto placement = PlacementsFrom(edges, plain);
 	std::vector<PathRow> rows;
-	RunBidirectional(plain, placement, Normalized(starts), Normalized(ends), options.directed,
-	                 options.heuristic, options.factor * options.epsilon, &rows, nullptr);
+	RunBidirectional(plain, placement, Normalized(starts), Normalized(ends), options.directed, options.heuristic,
+	                 options.factor * options.epsilon, &rows, nullptr);
 	return rows;
 }
 
@@ -351,8 +348,8 @@ std::vector<CostRow> BidirectionalAStarCost(const std::vector<CoordinateEdgeRow>
 	std::vector<EdgeRow> plain;
 	const auto placement = PlacementsFrom(edges, plain);
 	std::vector<CostRow> rows;
-	RunBidirectional(plain, placement, Normalized(starts), Normalized(ends), options.directed,
-	                 options.heuristic, options.factor * options.epsilon, nullptr, &rows);
+	RunBidirectional(plain, placement, Normalized(starts), Normalized(ends), options.directed, options.heuristic,
+	                 options.factor * options.epsilon, nullptr, &rows);
 	return rows;
 }
 

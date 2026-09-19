@@ -1,6 +1,7 @@
 # name: test/sql/with_points.test
 # description: the withPoints family -- routing from points partway along edges
-# group: [duckrouting]
+# group: [sql]
+
 #
 # Each point becomes a vertex numbered -pid, splitting its edge into segments
 # whose costs are proportional to the fractions. All five functions share that

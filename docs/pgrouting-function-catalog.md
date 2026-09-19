@@ -98,8 +98,8 @@ wrappers is unencumbered.
 | `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`, `pgr_withPointsVia` | own edge-splitting graph rewrite, then delegates | `duckrouting_with_points`, `duckrouting_with_points_cost`, `duckrouting_with_points_cost_matrix`, `duckrouting_with_points_via` |
 | `pgr_edwardMoore` | own SPFA; Boost only for edge iteration | `duckrouting_edward_moore` |
 | `pgr_binaryBreadthFirstSearch` | own 0-1 BFS; Boost only for edge iteration | `duckrouting_binary_breadth_first_search` |
-| `pgr_chinesePostman`, `pgr_chinesePostmanCost` | own. Zero `boost::` symbols |  |
-| `pgr_lineGraph`, `pgr_lineGraphFull` | own line-graph construction |  |
+| `pgr_chinesePostman`, `pgr_chinesePostmanCost` | own. Zero `boost::` symbols | `duckrouting_chinese_postman`, `duckrouting_chinese_postman_cost` |
+| `pgr_lineGraph`, `pgr_lineGraphFull` | own line-graph construction | `duckrouting_line_graph`, `duckrouting_line_graph_full` |
 | `pgr_pickDeliver`, `pgr_pickDeliverEuclidean` | own VRPPDTW heuristic, 17 source files. Zero `boost::` symbols |  |
 | `pgr_vrpOneDepot` | own legacy VRP code |  |
 | `pgr_contraction`, `pgr_deadEndContraction`, `pgr_linearContraction` | own contraction operators applied to a `boost::adjacency_list` | `duckrouting_contraction`, `duckrouting_dead_end_contraction`, `duckrouting_linear_contraction` |## Group 3 -- no C++; pure SQL / PL-pgSQL

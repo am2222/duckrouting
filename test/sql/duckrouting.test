@@ -1,6 +1,6 @@
 # name: test/sql/duckrouting.test
 # description: test duckrouting extension loading and registration
-# group: [duckrouting]
+# group: [sql]
 
 # Before we load the extension, this will fail
 statement error

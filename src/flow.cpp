@@ -97,8 +97,7 @@ FlowProblem BuildFlowProblem(const std::vector<FlowEdgeRow> &edges, const std::v
 	for (size_t i = 0; i < ordered.size(); i++) {
 		const FlowEdgeRow &edge = ordered[i];
 		const double forward = unit_capacity ? (IsTraversable(edge.cost) ? 1 : 0) : edge.capacity;
-		const double backward = unit_capacity ? (IsTraversable(edge.reverse_cost) ? 1 : 0)
-		                                      : edge.reverse_capacity;
+		const double backward = unit_capacity ? (IsTraversable(edge.reverse_cost) ? 1 : 0) : edge.reverse_capacity;
 		uint64_t from = 0;
 		uint64_t to = 0;
 		problem.index.Find(edge.source, from);
@@ -164,13 +163,12 @@ double Solve(FlowProblem &problem, FlowAlgorithm algorithm) {
 		std::vector<long> distance(n);
 		return boost::boykov_kolmogorov_max_flow(
 		    problem.graph, boost::get(boost::edge_capacity, problem.graph),
-		    boost::get(boost::edge_residual_capacity, problem.graph),
-		    boost::get(boost::edge_reverse, problem.graph), &predecessor[0], &color[0], &distance[0],
-		    boost::get(boost::vertex_index, problem.graph), problem.super_source, problem.super_sink);
+		    boost::get(boost::edge_residual_capacity, problem.graph), boost::get(boost::edge_reverse, problem.graph),
+		    &predecessor[0], &color[0], &distance[0], boost::get(boost::vertex_index, problem.graph),
+		    problem.super_source, problem.super_sink);
 	}
 	case FlowAlgorithm::MinCost:
-		boost::successive_shortest_path_nonnegative_weights(problem.graph, problem.super_source,
-		                                                    problem.super_sink);
+		boost::successive_shortest_path_nonnegative_weights(problem.graph, problem.super_source, problem.super_sink);
 		return 0;
 	case FlowAlgorithm::PushRelabel:
 	default:
@@ -251,8 +249,8 @@ std::vector<PathRow> EdgeDisjointPaths(const std::vector<FlowEdgeRow> &edges, co
 				// Undirected: an edge usable either way is usable both ways.
 				for (size_t i = 0; i < prepared.size(); i++) {
 					if (IsTraversable(prepared[i].cost) || IsTraversable(prepared[i].reverse_cost)) {
-						const double cost = IsTraversable(prepared[i].cost) ? prepared[i].cost
-						                                                   : prepared[i].reverse_cost;
+						const double cost =
+						    IsTraversable(prepared[i].cost) ? prepared[i].cost : prepared[i].reverse_cost;
 						prepared[i].cost = cost;
 						prepared[i].reverse_cost = cost;
 					}
@@ -383,8 +381,8 @@ std::vector<IdentifierRow> MaxCardinalityMatch(const std::vector<FlowEdgeRow> &e
 	// Matching is structural, so remember which input edge joined each pair.
 	std::map<std::pair<uint64_t, uint64_t>, int64_t> edge_of;
 	for (size_t i = 0; i < ordered.size(); i++) {
-		if (!IsTraversable(ordered[i].cost) && !IsTraversable(ordered[i].reverse_cost) &&
-		    ordered[i].capacity < 0 && ordered[i].reverse_capacity < 0) {
+		if (!IsTraversable(ordered[i].cost) && !IsTraversable(ordered[i].reverse_cost) && ordered[i].capacity < 0 &&
+		    ordered[i].reverse_capacity < 0) {
 			continue;
 		}
 		uint64_t from = 0;
@@ -414,11 +412,9 @@ std::vector<IdentifierRow> MaxCardinalityMatch(const std::vector<FlowEdgeRow> &e
 			rows.push_back(IdentifierRow {entry->second});
 		}
 	}
-	std::sort(rows.begin(), rows.end(),
-	          [](const IdentifierRow &a, const IdentifierRow &b) { return a.id < b.id; });
+	std::sort(rows.begin(), rows.end(), [](const IdentifierRow &a, const IdentifierRow &b) { return a.id < b.id; });
 	return rows;
 }
-
 
 // ---------------------------------------------------------------------------
 // DuckDB table function bindings
@@ -562,8 +558,7 @@ duckdb::unique_ptr<GlobalTableFunctionState> TotalInit(ClientContext &context, T
 	auto &bind_data = input.bind_data->Cast<FlowBindData>();
 	auto state = duckdb::make_uniq<FlowGlobalState<Value>>();
 	auto edges = LoadFlowEdges(context, bind_data.edges_sql, true, RequireCost);
-	state->rows.push_back(
-	    Value::DOUBLE(MaxFlowValue(edges, bind_data.sources, bind_data.sinks, Algorithm)));
+	state->rows.push_back(Value::DOUBLE(MaxFlowValue(edges, bind_data.sources, bind_data.sinks, Algorithm)));
 	return std::move(state);
 }
 
@@ -584,9 +579,9 @@ duckdb::unique_ptr<FunctionData> DisjointBind(ClientContext &, TableFunctionBind
 	auto bind_data = duckdb::make_uniq<FlowBindData>();
 	ReadFlowArguments(input, *bind_data);
 	names = {"seq", "path_id", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
-	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
-	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE,
-	                LogicalType::DOUBLE};
+	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+	                LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
 	return std::move(bind_data);
 }
 
@@ -686,8 +681,8 @@ TableFunctionSet FlowSet(const char *name, duckdb::table_function_t scan, duckdb
 } // namespace
 
 TableFunctionSet GetMaxFlowFunction() {
-	return FlowSet("duckrouting_max_flow", TotalScan, TotalBind<false>,
-	               TotalInit<FlowAlgorithm::PushRelabel, false>, false);
+	return FlowSet("duckrouting_max_flow", TotalScan, TotalBind<false>, TotalInit<FlowAlgorithm::PushRelabel, false>,
+	               false);
 }
 
 TableFunctionSet GetPushRelabelFunction() {

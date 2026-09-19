@@ -1,6 +1,6 @@
 # name: test/sql/contraction_ops.test
 # description: dead-end and linear contraction vs pgRouting
-# group: [duckrouting]
+# group: [sql]
 
 require duckrouting
 

@@ -1,6 +1,7 @@
 # name: test/sql/tsp.test
 # description: travelling salesman family vs pgRouting output
-# group: [duckrouting]
+# group: [sql]
+
 #
 # Expected results from pgRouting docqueries/tsp/.
 #

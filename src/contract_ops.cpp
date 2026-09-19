@@ -34,8 +34,8 @@ struct WorkingVertex {
 //! Distinct neighbours of `vertex` across its live edges. Dead ends and linear
 //! chains are both defined by how many *different* vertices you can get to,
 //! not by how many edges there are.
-std::set<int64_t> Neighbours(const std::map<int64_t, WorkingVertex> &vertices,
-                             const std::vector<WorkingEdge> &edges, int64_t vertex) {
+std::set<int64_t> Neighbours(const std::map<int64_t, WorkingVertex> &vertices, const std::vector<WorkingEdge> &edges,
+                             int64_t vertex) {
 	std::set<int64_t> result;
 	auto entry = vertices.find(vertex);
 	if (entry == vertices.end()) {
@@ -66,8 +66,7 @@ std::vector<ContractionRow> Contract(const std::vector<EdgeRow> &input, bool dir
                                      const std::vector<ContractionMethod> &methods, int64_t cycles,
                                      const std::vector<int64_t> &forbidden) {
 	std::vector<EdgeRow> ordered(input);
-	std::stable_sort(ordered.begin(), ordered.end(),
-	                 [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
+	std::stable_sort(ordered.begin(), ordered.end(), [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
 
 	std::vector<WorkingEdge> edges;
 	std::map<int64_t, WorkingVertex> vertices;
@@ -342,8 +341,7 @@ duckdb::unique_ptr<GlobalTableFunctionState> ContractInit(ClientContext &context
 	auto &bind_data = input.bind_data->Cast<ContractBindData>();
 	auto state = duckdb::make_uniq<ContractState>();
 	auto edges = LoadEdges(context, bind_data.edges_sql);
-	state->rows = Contract(edges, bind_data.directed, bind_data.methods, bind_data.cycles,
-	                       bind_data.forbidden);
+	state->rows = Contract(edges, bind_data.directed, bind_data.methods, bind_data.cycles, bind_data.forbidden);
 	return std::move(state);
 }
 

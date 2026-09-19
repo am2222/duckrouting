@@ -1,6 +1,6 @@
 # name: test/sql/contraction_withpoints.test
 # description: contraction hierarchies and withPointsDD vs pgRouting
-# group: [duckrouting]
+# group: [sql]
 
 require duckrouting
 

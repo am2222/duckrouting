@@ -94,8 +94,8 @@ struct KspRow {
 //! With `u_turn_on_edge` false, a leg may not leave a via vertex by the edge
 //! the previous leg arrived on, unless the vertex is a dead end or the
 //! restriction would make the next vertex unreachable.
-std::vector<ViaRow> DijkstraVia(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &via_vids,
-                                bool directed, bool strict, bool u_turn_on_edge);
+std::vector<ViaRow> DijkstraVia(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &via_vids, bool directed,
+                                bool strict, bool u_turn_on_edge);
 
 //! The `cap` cheapest (start, end) pairs, as full paths.
 std::vector<PathRow> DijkstraNear(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,

@@ -23,8 +23,7 @@ struct PlacedVertex {
 	double y = 0;
 };
 
-typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, PlacedVertex, RoutingEdge>
-    AStarDirectedGraph;
+typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, PlacedVertex, RoutingEdge> AStarDirectedGraph;
 typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS, PlacedVertex, RoutingEdge>
     AStarUndirectedGraph;
 
@@ -297,7 +296,6 @@ std::vector<CostRow> AStarCost(const std::vector<CoordinateEdgeRow> &edges, cons
 	return costs;
 }
 
-
 // ---------------------------------------------------------------------------
 // DuckDB table function bindings
 // ---------------------------------------------------------------------------
@@ -503,8 +501,7 @@ TableFunctionSet GetAStarFunction() {
 	for (size_t start_is_list = 0; start_is_list < 2; start_is_list++) {
 		for (size_t end_is_list = 0; end_is_list < 2; end_is_list++) {
 			for (size_t with_flag = 0; with_flag < 2; with_flag++) {
-				duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR,
-				                                       start_is_list ? list : LogicalType::BIGINT,
+				duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, start_is_list ? list : LogicalType::BIGINT,
 				                                       end_is_list ? list : LogicalType::BIGINT};
 				if (with_flag) {
 					arguments.push_back(LogicalType::BOOLEAN);
@@ -524,8 +521,7 @@ TableFunctionSet GetAStarCostFunction() {
 	for (size_t start_is_list = 0; start_is_list < 2; start_is_list++) {
 		for (size_t end_is_list = 0; end_is_list < 2; end_is_list++) {
 			for (size_t with_flag = 0; with_flag < 2; with_flag++) {
-				duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR,
-				                                       start_is_list ? list : LogicalType::BIGINT,
+				duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, start_is_list ? list : LogicalType::BIGINT,
 				                                       end_is_list ? list : LogicalType::BIGINT};
 				if (with_flag) {
 					arguments.push_back(LogicalType::BOOLEAN);

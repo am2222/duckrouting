@@ -1,6 +1,7 @@
 # name: test/sql/bidirectional_utilities.test
 # description: bidirectional search, SPFA, 0-1 BFS and the utility functions
-# group: [duckrouting]
+# group: [sql]
+
 #
 # These are group 2 in the catalog: pgRouting implements them itself rather
 # than delegating to Boost, and so does duckrouting. They solve the same

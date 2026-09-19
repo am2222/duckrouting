@@ -66,8 +66,7 @@ std::vector<DrivingDistanceRow> WalkGraph(const Adjacency &adjacency, const Vert
 			// reversed, so push them reversed to preserve that order.
 			const std::vector<Arc> &neighbours = adjacency[current.vertex];
 			for (size_t i = 0; i < neighbours.size(); i++) {
-				const Arc &arc =
-				    traversal == Traversal::Bfs ? neighbours[i] : neighbours[neighbours.size() - 1 - i];
+				const Arc &arc = traversal == Traversal::Bfs ? neighbours[i] : neighbours[neighbours.size() - 1 - i];
 				if (seen[arc.to]) {
 					continue;
 				}
@@ -80,8 +79,7 @@ std::vector<DrivingDistanceRow> WalkGraph(const Adjacency &adjacency, const Vert
 				} else if (static_cast<double>(depth) > limit) {
 					continue;
 				}
-				queue.push_back(
-				    Pending {arc.to, index.IdOf(current.vertex), arc.edge, arc.cost, depth, agg_cost});
+				queue.push_back(Pending {arc.to, index.IdOf(current.vertex), arc.edge, arc.cost, depth, agg_cost});
 			}
 		}
 	}
@@ -93,8 +91,7 @@ std::vector<DrivingDistanceRow> GraphTraversal(const std::vector<EdgeRow> &edges
 	// Sorting by edge id makes the neighbour order deterministic regardless of
 	// how the user's query happened to order its rows.
 	std::vector<EdgeRow> ordered(edges);
-	std::stable_sort(ordered.begin(), ordered.end(),
-	                 [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
+	std::stable_sort(ordered.begin(), ordered.end(), [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
 
 	VertexIndex index;
 	const Adjacency adjacency = BuildAdjacency(ordered, index, directed);
@@ -105,9 +102,8 @@ namespace {
 
 //! Turns a Boost predecessor map into pgRouting's per-node path rows.
 template <typename Graph>
-std::vector<PathRow> BuildPath(const Graph &graph, const VertexIndex &index,
-                               const std::vector<uint64_t> &predecessor, uint64_t source, uint64_t sink,
-                               int64_t start_vid, int64_t end_vid) {
+std::vector<PathRow> BuildPath(const Graph &graph, const VertexIndex &index, const std::vector<uint64_t> &predecessor,
+                               uint64_t source, uint64_t sink, int64_t start_vid, int64_t end_vid) {
 	if (sink != source && predecessor[sink] == sink) {
 		return {};
 	}
@@ -167,8 +163,8 @@ std::vector<int64_t> Normalized(const std::vector<int64_t> &values) {
 }
 
 template <typename Graph>
-std::vector<PathRow> BellmanFordOn(const Graph &graph, const VertexIndex &index,
-                                   const std::vector<int64_t> &starts, const std::vector<int64_t> &ends) {
+std::vector<PathRow> BellmanFordOn(const Graph &graph, const VertexIndex &index, const std::vector<int64_t> &starts,
+                                   const std::vector<int64_t> &ends) {
 	const size_t n = boost::num_vertices(graph);
 	std::vector<PathRow> rows;
 	for (size_t s = 0; s < starts.size(); s++) {
@@ -258,14 +254,12 @@ std::vector<PathRow> DagShortestPath(const std::vector<EdgeRow> &edges, const st
 			if (!index.Find(normalized_ends[e], sink)) {
 				continue;
 			}
-			auto path = BuildPath(graph, index, predecessor, source, sink, normalized_starts[s],
-			                      normalized_ends[e]);
+			auto path = BuildPath(graph, index, predecessor, source, sink, normalized_starts[s], normalized_ends[e]);
 			rows.insert(rows.end(), path.begin(), path.end());
 		}
 	}
 	return rows;
 }
-
 
 // ---------------------------------------------------------------------------
 // DuckDB table function bindings
@@ -373,8 +367,7 @@ duckdb::unique_ptr<GlobalTableFunctionState> SearchInit(ClientContext &context, 
 	auto &bind_data = input.bind_data->Cast<SearchBindData>();
 	auto state = duckdb::make_uniq<SearchGlobalState<DrivingDistanceRow>>();
 	auto edges = LoadEdges(context, bind_data.edges_sql);
-	state->rows = GraphTraversal(edges, bind_data.roots, bind_data.traversal, bind_data.limit,
-	                             bind_data.directed);
+	state->rows = GraphTraversal(edges, bind_data.roots, bind_data.traversal, bind_data.limit, bind_data.directed);
 	return std::move(state);
 }
 
@@ -451,8 +444,7 @@ TableFunctionSet SearchSet(const char *name) {
 	const LogicalType list = LogicalType::LIST(LogicalType::BIGINT);
 	for (size_t root_is_list = 0; root_is_list < 2; root_is_list++) {
 		for (size_t with_depth = 0; with_depth < 2; with_depth++) {
-			duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR,
-			                                       root_is_list ? list : LogicalType::BIGINT};
+			duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, root_is_list ? list : LogicalType::BIGINT};
 			if (with_depth) {
 				arguments.push_back(LogicalType::BIGINT);
 			}
@@ -473,8 +465,7 @@ TableFunctionSet PathSet(const char *name, bool accepts_directed) {
 		for (size_t end_is_list = 0; end_is_list < 2; end_is_list++) {
 			const size_t variants = accepts_directed ? 2u : 1u;
 			for (size_t with_flag = 0; with_flag < variants; with_flag++) {
-				duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR,
-				                                       start_is_list ? list : LogicalType::BIGINT,
+				duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, start_is_list ? list : LogicalType::BIGINT,
 				                                       end_is_list ? list : LogicalType::BIGINT};
 				if (with_flag) {
 					arguments.push_back(LogicalType::BOOLEAN);

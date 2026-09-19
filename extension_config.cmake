@@ -3,6 +3,7 @@
 # Extension from this repo
 duckdb_extension_load(duckrouting
     SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
+    EXTENSION_VERSION v0.0.1
 )
 
 # The three geometry helpers are SQL macros over DuckDB's spatial extension, so
