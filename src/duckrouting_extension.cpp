@@ -25,6 +25,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting_version_scalar_function);
 
 	loader.RegisterFunction(duckrouting::GetDijkstraFunction());
+	loader.RegisterFunction(duckrouting::GetDijkstraCostFunction());
+	loader.RegisterFunction(duckrouting::GetDijkstraCostMatrixFunction());
+	loader.RegisterFunction(duckrouting::GetDrivingDistanceFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

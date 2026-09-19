@@ -6,10 +6,20 @@
 
 #include <algorithm>
 #include <limits>
+#include <map>
 
 namespace duckrouting {
 
 namespace {
+
+//! De-duplicate and sort, so results come out in pgRouting's order and a
+//! repeated vertex does not produce repeated rows.
+std::vector<int64_t> Normalize(const std::vector<int64_t> &vids) {
+	std::vector<int64_t> result(vids);
+	std::sort(result.begin(), result.end());
+	result.erase(std::unique(result.begin(), result.end()), result.end());
+	return result;
+}
 
 //! Cheapest edge from `from` to `to`. Dijkstra relaxes parallel edges by their
 //! minimum, so the cheapest one is the edge that the shortest path actually used.
@@ -30,28 +40,36 @@ bool CheapestEdge(const Graph &graph, uint64_t from, uint64_t to, RoutingEdge &r
 	return found;
 }
 
+//! One full single-source Dijkstra. Every caller in this file runs this once
+//! per start vertex and then reads whatever it needs out of the two maps.
 template <typename Graph>
-std::vector<PathRow> Solve(const Graph &graph, const VertexIndex &index, uint64_t source, uint64_t sink,
-                           int64_t start_vid, int64_t end_vid) {
-	std::vector<uint64_t> predecessor(boost::num_vertices(graph));
-	std::vector<double> distance(boost::num_vertices(graph));
-
+void RunDijkstra(const Graph &graph, uint64_t source, std::vector<uint64_t> &predecessor,
+                 std::vector<double> &distance) {
+	predecessor.assign(boost::num_vertices(graph), 0);
+	distance.assign(boost::num_vertices(graph), 0);
 	boost::dijkstra_shortest_paths(
 	    graph, source,
-	    boost::predecessor_map(boost::make_iterator_property_map(predecessor.begin(), boost::get(boost::vertex_index, graph)))
-	        .distance_map(boost::make_iterator_property_map(distance.begin(), boost::get(boost::vertex_index, graph)))
+	    boost::predecessor_map(
+	        boost::make_iterator_property_map(predecessor.begin(), boost::get(boost::vertex_index, graph)))
+	        .distance_map(
+	            boost::make_iterator_property_map(distance.begin(), boost::get(boost::vertex_index, graph)))
 	        .weight_map(boost::get(&RoutingEdge::cost, graph))
-	        // pgRouting uses a true infinity rather than Boost's default of
-	        // numeric_limits<double>::max(), so that an Infinity edge cost
-	        // propagates instead of overflowing.
+	        // A true infinity, not Boost's default of numeric_limits<double>::max().
+	        // This is what lets an edge carrying the kInfiniteCost sentinel relax:
+	        // DBL_MAX < inf holds, where DBL_MAX < DBL_MAX would not.
 	        .distance_inf(std::numeric_limits<double>::infinity()));
+}
 
+bool Reached(const std::vector<uint64_t> &predecessor, uint64_t source, uint64_t sink) {
 	// Boost leaves a vertex as its own predecessor when it was never reached.
-	if (predecessor[sink] == sink) {
-		return {};
-	}
+	return sink == source || predecessor[sink] != sink;
+}
 
-	// Walk the predecessor chain back to the source, then flip it.
+//! Turn a predecessor chain into pgRouting's per-node rows.
+template <typename Graph>
+std::vector<PathRow> ExtractPath(const Graph &graph, const VertexIndex &index,
+                                 const std::vector<uint64_t> &predecessor, uint64_t source, uint64_t sink,
+                                 int64_t start_vid, int64_t end_vid) {
 	std::vector<uint64_t> path;
 	for (uint64_t at = sink;; at = predecessor[at]) {
 		path.push_back(at);
@@ -70,15 +88,14 @@ std::vector<PathRow> Solve(const Graph &graph, const VertexIndex &index, uint64_
 		row.start_vid = start_vid;
 		row.end_vid = end_vid;
 		row.node = index.IdOf(path[i]);
-		row.agg_cost = agg_cost;
+		row.agg_cost = DecodeInfinity(agg_cost);
 		if (i + 1 < path.size()) {
 			RoutingEdge used {};
 			if (!CheapestEdge(graph, path[i], path[i + 1], used)) {
-				// Unreachable in practice: the path came out of this same graph.
 				return {};
 			}
 			row.edge = used.id;
-			row.cost = used.cost;
+			row.cost = DecodeInfinity(used.cost);
 			agg_cost += used.cost;
 		} else {
 			// pgRouting terminates a path with edge -1 and cost 0.
@@ -90,149 +107,187 @@ std::vector<PathRow> Solve(const Graph &graph, const VertexIndex &index, uint64_
 	return rows;
 }
 
-} // namespace
+//! Solved single-source state for one start vertex.
+struct Solved {
+	std::vector<uint64_t> predecessor;
+	std::vector<double> distance;
+	uint64_t source;
+	bool found;
+};
 
-std::vector<PathRow> Dijkstra(const std::vector<EdgeRow> &edges, int64_t start_vid, int64_t end_vid, bool directed) {
-	// pgRouting drops pairs whose endpoints coincide rather than emitting a
-	// zero-length path.
-	if (start_vid == end_vid) {
-		return {};
+template <typename Graph>
+Solved SolveFrom(const Graph &graph, const VertexIndex &index, int64_t start_vid) {
+	Solved solved {};
+	solved.found = index.Find(start_vid, solved.source);
+	if (solved.found) {
+		RunDijkstra(graph, solved.source, solved.predecessor, solved.distance);
 	}
+	return solved;
+}
 
+template <typename Graph>
+std::vector<PathRow> DijkstraImpl(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                  const std::vector<int64_t> &ends) {
 	VertexIndex index;
-	uint64_t source = 0;
-	uint64_t sink = 0;
-	if (directed) {
-		auto graph = BuildGraph<DirectedGraph>(edges, index);
-		if (!index.Find(start_vid, source) || !index.Find(end_vid, sink)) {
-			return {};
-		}
-		return Solve(graph, index, source, sink, start_vid, end_vid);
-	}
-	auto graph = BuildGraph<UndirectedGraph>(edges, index);
-	if (!index.Find(start_vid, source) || !index.Find(end_vid, sink)) {
-		return {};
-	}
-	return Solve(graph, index, source, sink, start_vid, end_vid);
-}
-
-} // namespace duckrouting
-
-// ---------------------------------------------------------------------------
-// DuckDB table function binding
-// ---------------------------------------------------------------------------
-
-namespace duckrouting {
-
-namespace {
-
-using duckdb::BinderException;
-using duckdb::ClientContext;
-using duckdb::DataChunk;
-using duckdb::FunctionData;
-using duckdb::GlobalTableFunctionState;
-using duckdb::idx_t;
-using duckdb::LogicalType;
-using duckdb::TableFunction;
-using duckdb::TableFunctionBindInput;
-using duckdb::TableFunctionInitInput;
-using duckdb::TableFunctionInput;
-using duckdb::Value;
-
-struct DijkstraBindData : public duckdb::TableFunctionData {
-	std::string edges_sql;
-	int64_t start_vid = 0;
-	int64_t end_vid = 0;
-	bool directed = true;
-};
-
-struct DijkstraGlobalState : public GlobalTableFunctionState {
+	auto graph = BuildGraph<Graph>(edges, index);
 	std::vector<PathRow> rows;
-	idx_t offset = 0;
-
-	idx_t MaxThreads() const override {
-		return 1;
-	}
-};
-
-duckdb::unique_ptr<FunctionData> DijkstraBind(ClientContext &context, TableFunctionBindInput &input,
-                                              duckdb::vector<LogicalType> &return_types,
-                                              duckdb::vector<std::string> &names) {
-	for (idx_t i = 0; i < input.inputs.size(); i++) {
-		if (input.inputs[i].IsNull()) {
-			throw BinderException("duckrouting_dijkstra: arguments must not be NULL");
+	for (size_t s = 0; s < starts.size(); s++) {
+		const int64_t start_vid = starts[s];
+		Solved solved = SolveFrom(graph, index, start_vid);
+		if (!solved.found) {
+			continue;
 		}
-	}
-
-	auto bind_data = duckdb::make_uniq<DijkstraBindData>();
-	bind_data->edges_sql = input.inputs[0].GetValue<std::string>();
-	bind_data->start_vid = input.inputs[1].GetValue<int64_t>();
-	bind_data->end_vid = input.inputs[2].GetValue<int64_t>();
-	if (input.inputs.size() > 3) {
-		bind_data->directed = input.inputs[3].GetValue<bool>();
-	}
-	// `directed => false` is how pgRouting spells it, so accept it as a named
-	// parameter too.
-	for (auto &parameter : input.named_parameters) {
-		if (duckdb::StringUtil::CIEquals(parameter.first, "directed")) {
-			if (parameter.second.IsNull()) {
-				throw BinderException("duckrouting_dijkstra: 'directed' must not be NULL");
+		for (size_t e = 0; e < ends.size(); e++) {
+			const int64_t end_vid = ends[e];
+			// pgRouting drops pairs whose endpoints coincide rather than
+			// emitting a zero-length path.
+			if (end_vid == start_vid) {
+				continue;
 			}
-			bind_data->directed = parameter.second.GetValue<bool>();
+			uint64_t sink = 0;
+			if (!index.Find(end_vid, sink) || !Reached(solved.predecessor, solved.source, sink)) {
+				continue;
+			}
+			auto path = ExtractPath(graph, index, solved.predecessor, solved.source, sink, start_vid, end_vid);
+			rows.insert(rows.end(), path.begin(), path.end());
 		}
 	}
-
-	names = {"seq", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
-	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
-	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
-	return std::move(bind_data);
+	return rows;
 }
 
-duckdb::unique_ptr<GlobalTableFunctionState> DijkstraInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = input.bind_data->Cast<DijkstraBindData>();
-	auto state = duckdb::make_uniq<DijkstraGlobalState>();
-	auto edges = LoadEdges(context, bind_data.edges_sql);
-	state->rows = Dijkstra(edges, bind_data.start_vid, bind_data.end_vid, bind_data.directed);
-	return std::move(state);
-}
-
-void DijkstraScan(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
-	auto &state = data.global_state->Cast<DijkstraGlobalState>();
-	const idx_t remaining = state.rows.size() - state.offset;
-	const idx_t count = duckdb::MinValue<idx_t>(STANDARD_VECTOR_SIZE, remaining);
-	output.SetCardinality(count);
-
-	for (idx_t i = 0; i < count; i++) {
-		auto &row = state.rows[state.offset + i];
-		// `seq` numbers the whole result, `path_seq` numbers within one path.
-		output.SetValue(0, i, Value::BIGINT(static_cast<int64_t>(state.offset + i) + 1));
-		output.SetValue(1, i, Value::BIGINT(row.path_seq));
-		output.SetValue(2, i, Value::BIGINT(row.start_vid));
-		output.SetValue(3, i, Value::BIGINT(row.end_vid));
-		output.SetValue(4, i, Value::BIGINT(row.node));
-		output.SetValue(5, i, Value::BIGINT(row.edge));
-		output.SetValue(6, i, Value::DOUBLE(row.cost));
-		output.SetValue(7, i, Value::DOUBLE(row.agg_cost));
+template <typename Graph>
+std::vector<CostRow> DijkstraCostImpl(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                      const std::vector<int64_t> &ends) {
+	VertexIndex index;
+	auto graph = BuildGraph<Graph>(edges, index);
+	std::vector<CostRow> rows;
+	for (size_t s = 0; s < starts.size(); s++) {
+		const int64_t start_vid = starts[s];
+		Solved solved = SolveFrom(graph, index, start_vid);
+		if (!solved.found) {
+			continue;
+		}
+		for (size_t e = 0; e < ends.size(); e++) {
+			const int64_t end_vid = ends[e];
+			if (end_vid == start_vid) {
+				continue;
+			}
+			uint64_t sink = 0;
+			if (!index.Find(end_vid, sink) || !Reached(solved.predecessor, solved.source, sink)) {
+				continue;
+			}
+			rows.push_back(CostRow {start_vid, end_vid, DecodeInfinity(solved.distance[sink])});
+		}
 	}
-	state.offset += count;
+	return rows;
+}
+
+template <typename Graph>
+std::vector<DrivingDistanceRow> DrivingDistanceImpl(const std::vector<EdgeRow> &edges,
+                                                    const std::vector<int64_t> &starts, double distance_limit) {
+	VertexIndex index;
+	auto graph = BuildGraph<Graph>(edges, index);
+	std::vector<DrivingDistanceRow> rows;
+	for (size_t s = 0; s < starts.size(); s++) {
+		const int64_t start_vid = starts[s];
+		Solved solved = SolveFrom(graph, index, start_vid);
+		if (!solved.found) {
+			continue;
+		}
+		for (uint64_t v = 0; v < index.Size(); v++) {
+			if (!Reached(solved.predecessor, solved.source, v) || solved.distance[v] > distance_limit) {
+				continue;
+			}
+			DrivingDistanceRow row {};
+			row.start_vid = start_vid;
+			row.node = index.IdOf(v);
+			row.agg_cost = DecodeInfinity(solved.distance[v]);
+			if (v == solved.source) {
+				// pgRouting roots the tree at depth 0 with edge -1.
+				row.depth = 0;
+				row.pred = start_vid;
+				row.edge = -1;
+				row.cost = 0;
+			} else {
+				const uint64_t parent = solved.predecessor[v];
+				row.pred = index.IdOf(parent);
+				RoutingEdge used {};
+				if (!CheapestEdge(graph, parent, v, used)) {
+					continue;
+				}
+				row.edge = used.id;
+				row.cost = DecodeInfinity(used.cost);
+				// Depth is hop count from the root, which the predecessor
+				// chain gives directly.
+				int64_t depth = 0;
+				for (uint64_t at = v; at != solved.source; at = solved.predecessor[at]) {
+					depth++;
+				}
+				row.depth = depth;
+			}
+			rows.push_back(row);
+		}
+	}
+	return rows;
 }
 
 } // namespace
 
-duckdb::TableFunctionSet GetDijkstraFunction() {
-	duckdb::TableFunctionSet set("duckrouting_dijkstra");
+std::vector<PathRow> Dijkstra(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                              const std::vector<int64_t> &ends, bool directed) {
+	const auto s = Normalize(starts);
+	const auto e = Normalize(ends);
+	return directed ? DijkstraImpl<DirectedGraph>(edges, s, e) : DijkstraImpl<UndirectedGraph>(edges, s, e);
+}
 
-	TableFunction implicit({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT}, DijkstraScan,
-	                       DijkstraBind, DijkstraInit);
-	implicit.named_parameters["directed"] = LogicalType::BOOLEAN;
-	set.AddFunction(implicit);
+std::vector<CostRow> DijkstraCost(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                  const std::vector<int64_t> &ends, bool directed) {
+	const auto s = Normalize(starts);
+	const auto e = Normalize(ends);
+	return directed ? DijkstraCostImpl<DirectedGraph>(edges, s, e) : DijkstraCostImpl<UndirectedGraph>(edges, s, e);
+}
 
-	TableFunction explicit_directed(
-	    {LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BOOLEAN}, DijkstraScan,
-	    DijkstraBind, DijkstraInit);
-	set.AddFunction(explicit_directed);
+std::vector<CostRow> DijkstraCostMatrix(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &vids,
+                                        bool directed) {
+	return DijkstraCost(edges, vids, vids, directed);
+}
 
-	return set;
+std::vector<DrivingDistanceRow> DrivingDistance(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                                double distance_limit, bool directed, bool equicost) {
+	const auto s = Normalize(starts);
+	auto rows = directed ? DrivingDistanceImpl<DirectedGraph>(edges, s, distance_limit)
+	                     : DrivingDistanceImpl<UndirectedGraph>(edges, s, distance_limit);
+
+	if (equicost) {
+		// Keep each node only for the start it is cheapest from.
+		std::map<int64_t, size_t> best;
+		for (size_t i = 0; i < rows.size(); i++) {
+			auto entry = best.find(rows[i].node);
+			if (entry == best.end() || rows[i].agg_cost < rows[entry->second].agg_cost) {
+				best[rows[i].node] = i;
+			}
+		}
+		std::vector<DrivingDistanceRow> kept;
+		kept.reserve(best.size());
+		for (size_t i = 0; i < rows.size(); i++) {
+			if (best[rows[i].node] == i) {
+				kept.push_back(rows[i]);
+			}
+		}
+		rows = kept;
+	}
+
+	// pgRouting orders by start_vid, then depth, then node.
+	std::stable_sort(rows.begin(), rows.end(), [](const DrivingDistanceRow &a, const DrivingDistanceRow &b) {
+		if (a.start_vid != b.start_vid) {
+			return a.start_vid < b.start_vid;
+		}
+		if (a.depth != b.depth) {
+			return a.depth < b.depth;
+		}
+		return a.node < b.node;
+	});
+	return rows;
 }
 
 } // namespace duckrouting

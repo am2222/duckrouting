@@ -2,11 +2,32 @@
 
 #include "duckdb.hpp"
 
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
 namespace duckrouting {
+
+//! pgRouting stores an infinite edge cost as a large *finite* sentinel, because
+//! Boost's relaxation test is `dist[u] + w < dist[v]` -- with a true infinity
+//! that reduces to `inf < inf`, which is false, so the edge would never be
+//! relaxed and the route would silently disappear. Substituting DBL_MAX keeps
+//! the edge usable (DBL_MAX < inf holds, given distance_inf is a true infinity)
+//! and the value is mapped back to Infinity on output.
+//! See pgRouting src/cpp_common/pgdata_fetchers.cpp and to_postgres.cpp.
+constexpr double kInfiniteCost = (std::numeric_limits<double>::max)();
+
+//! Applied when reading `edges_sql`.
+inline double EncodeInfinity(double cost) {
+	return std::isinf(cost) ? kInfiniteCost : cost;
+}
+
+//! Applied to every cost and agg_cost on the way out.
+inline double DecodeInfinity(double value) {
+	return std::fabs(value - kInfiniteCost) < 1 ? std::numeric_limits<double>::infinity() : value;
+}
 
 //! One row of a pgRouting-style `edges_sql` result.
 //! A negative cost means the edge does not exist in that direction, which is
@@ -21,7 +42,7 @@ struct EdgeRow {
 
 //! True when a cost value describes a traversable edge.
 inline bool IsTraversable(double cost) {
-	return cost >= 0 && !duckdb::Value::IsNan(cost);
+	return cost >= 0 && !std::isnan(cost);
 }
 
 //! Runs `edges_sql` and projects it onto the columns pgRouting requires:

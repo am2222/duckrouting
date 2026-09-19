@@ -16,8 +16,14 @@ SELECT duckrouting_version('Sam') ILIKE 'Duckrouting Sam, built against Boost %'
 ----
 true
 
-# The routing table functions are registered under both arities.
-query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'duckrouting_dijkstra';
+# Every routing function is registered, each with overloads for scalar and
+# array vertex arguments, with and without the trailing `directed` flag.
+query TI
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name LIKE 'duckrouting_%' AND function_type = 'table'
+GROUP BY function_name ORDER BY function_name;
 ----
-2
+duckrouting_dijkstra	8
+duckrouting_dijkstra_cost	8
+duckrouting_dijkstra_cost_matrix	2
+duckrouting_driving_distance	4

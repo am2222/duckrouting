@@ -89,7 +89,11 @@ std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql) 
 			}
 			// A NULL reverse_cost means "no reverse edge", same as a negative one.
 			const double reverse_cost = reverse_valid.RowIsValid(row) ? reverse_costs[row] : -1.0;
-			edges.push_back(EdgeRow {ids[row], sources[row], targets[row], costs[row], reverse_cost});
+			// Note this also maps -Infinity onto the sentinel, turning what looks
+			// like "no edge" into a maximally expensive one. That is pgRouting's
+			// behaviour too: it tests std::isinf before it tests cost < 0.
+			edges.push_back(EdgeRow {ids[row], sources[row], targets[row], EncodeInfinity(costs[row]),
+			                         EncodeInfinity(reverse_cost)});
 		}
 	}
 	return edges;

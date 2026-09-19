@@ -32,8 +32,12 @@ wrappers is unencumbered.
 
 | Function(s) | BGL algorithm | duckrouting |
 | --- | --- | --- |
-| `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_dijkstraCostMatrix`, `pgr_dijkstraVia`, `pgr_dijkstraNear`, `pgr_dijkstraNearCost` | `dijkstra_shortest_paths` / `_no_init` | `duckrouting_dijkstra` (one-to-one) |
-| `pgr_drivingDistance`, `pgr_withPointsDD` | `dijkstra_shortest_paths` + visitor | |
+| `pgr_dijkstra` | `dijkstra_shortest_paths` / `_no_init` | `duckrouting_dijkstra` |
+| `pgr_dijkstraCost` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_cost` |
+| `pgr_dijkstraCostMatrix` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_cost_matrix` |
+| `pgr_dijkstraVia`, `pgr_dijkstraNear`, `pgr_dijkstraNearCost` | `dijkstra_shortest_paths` | not yet |
+| `pgr_drivingDistance` | `dijkstra_shortest_paths` + visitor | `duckrouting_driving_distance` |
+| `pgr_withPointsDD` | `dijkstra_shortest_paths` + visitor | not yet |
 | `pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix` | `astar_search` | |
 | `pgr_floydWarshall` | `floyd_warshall_all_pairs_shortest_paths` | |
 | `pgr_johnson` | `johnson_all_pairs_shortest_paths` | |
@@ -123,13 +127,25 @@ equal-cost path wins, so this is not a defect in either implementation. The
 tests assert hop count, endpoints and total cost for those cases, plus a check
 that every reported edge really connects its two reported nodes.
 
-### An infinite edge cost yields no path instead of an infinite one
+### Infinite edge costs need a sentinel (resolved)
 
 `pgtap/.../edge_cases/infinity_cost.pg` sets an edge to `'Infinity'` and expects
-routes through it to return `agg_cost = Infinity` -- a path is still reported.
-duckrouting returns zero rows instead. Boost's relaxation test is
-`dist[u] + w < dist[v]`; with `distance_inf` set to a true infinity that becomes
-`inf < inf`, which is false, so the edge is never relaxed. We pass
-`.distance_inf(std::numeric_limits<double>::infinity())` exactly as pgRouting
-does, so this is not a missing option -- the mechanism pgRouting uses to produce
-an infinite-cost path has not been identified. Unresolved.
+routes through it to return `agg_cost = Infinity`. Boost alone cannot do this:
+its relaxation test is `dist[u] + w < dist[v]`, which for an infinite weight
+becomes `inf < inf` and is false, so the edge is never relaxed and the route
+disappears. A standalone Boost probe confirmed this under both
+`distance_inf` settings.
+
+pgRouting solves it outside the algorithm, in two halves:
+
+- on ingest, `src/cpp_common/pgdata_fetchers.cpp` maps `isinf(cost)` to
+  `std::numeric_limits<double>::max()`, a large *finite* weight Boost will relax
+  given that `distance_inf` is a true infinity (`DBL_MAX < inf` holds);
+- on output, `to_inf()` in `src/cpp_common/to_postgres.cpp` maps values within
+  `1.0` of `DBL_MAX` back to `Infinity`.
+
+duckrouting now does the same, in `EncodeInfinity` / `DecodeInfinity`
+(`src/include/duckrouting/edges.hpp`), and matches pgRouting's expected output.
+One consequence inherited from pgRouting: `-Infinity` is also mapped onto the
+sentinel, so it becomes a maximally expensive edge rather than "no edge",
+because the `isinf` test runs before the `cost < 0` test.

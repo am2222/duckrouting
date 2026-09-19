@@ -275,19 +275,13 @@ SELECT count(*) FROM (
 0
 
 # ---------------------------------------------------------------------------
-# KNOWN DIVERGENCE FROM pgRouting: infinite edge cost
+# Infinite edge cost, from pgtap/dijkstra/dijkstra/edge_cases/infinity_cost.pg
 # ---------------------------------------------------------------------------
-# pgRouting's pgtap/dijkstra/dijkstra/edge_cases/infinity_cost.pg sets edge 7
-# (3->7) to 'Infinity' and then expects routes through it to come back with
-# agg_cost = Infinity -- that is, a path is still reported, just an infinitely
-# expensive one. Boost never relaxes such an edge, because the relaxation test
-# is `dist[u] + w < dist[v]`, and with distance_inf set to a true infinity that
-# reduces to `inf < inf`, which is false. We therefore report no path at all.
-#
-# We pass .distance_inf(infinity()) exactly as pgRouting does, so this is not a
-# missing option; the mechanism pgRouting uses to produce an Infinity path has
-# not been identified. These assertions pin our CURRENT behaviour so that a
-# future change is visible, and are NOT pgRouting-verified.
+# Boost will not relax an edge whose weight is a true infinity, because the
+# relaxation test `dist[u] + w < dist[v]` becomes `inf < inf`. pgRouting works
+# around this by storing Infinity as DBL_MAX on ingest and mapping it back on
+# output; duckrouting does the same, so a route through an infinite edge is
+# still reported, at an infinite cost.
 
 statement ok
 CREATE TABLE inf_edges AS SELECT * FROM edges;
@@ -295,25 +289,188 @@ CREATE TABLE inf_edges AS SELECT * FROM edges;
 statement ok
 UPDATE inf_edges SET cost = 'Infinity' WHERE id = 7;
 
-# Before the change, 1 -> 11 costs 3. This part does match pgRouting (its q0).
+# pgRouting q0: before the change, 1 -> 11 costs 3.
 query R
 SELECT max(agg_cost) FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges', 1, 11);
 ----
 3
 
-# pgRouting expects one row with agg_cost = Infinity here; we return zero rows.
-query I
-SELECT count(*) FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM inf_edges', 3, 7);
-----
-0
-
-query I
-SELECT count(*) FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM inf_edges', 1, 11);
-----
-0
-
-# Routes that avoid the infinite edge are unaffected (pgRouting's q1).
+# pgRouting q1: a route avoiding edge 7 is unaffected.
 query R
 SELECT max(agg_cost) FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM inf_edges', 1, 3);
+----
+1
+
+# pgRouting q2: 3 -> 7 goes through the infinite edge and still returns a path.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM inf_edges', 3, 7);
+----
+1	1	3	7	3	7	inf	0
+2	2	3	7	7	-1	0	inf
+
+# pgRouting q4 and q6: any route crossing edge 7 aggregates to Infinity.
+query R
+SELECT max(agg_cost) FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM inf_edges', 1, 7);
+----
+inf
+
+query R
+SELECT max(agg_cost) FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM inf_edges', 1, 11);
+----
+inf
+
+# ---------------------------------------------------------------------------
+# Many-to-many, from pgRouting docqueries q7
+# ---------------------------------------------------------------------------
+# Every ordered pair from the list, minus the pairs whose endpoints coincide.
+query I
+SELECT count(*) FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', [7,10,15], [7,10,15]);
+----
+22
+
+# Results are grouped by start_vid then end_vid, and repeated vertices in the
+# input do not produce repeated output (pgRouting q6 passes 7,10,15,10,10,15).
+query II
+SELECT DISTINCT start_vid, end_vid
+FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', [7,10,15,10,10,15], [10,7,10,15])
+ORDER BY start_vid, end_vid;
+----
+7	10
+7	15
+10	7
+10	15
+15	7
+15	10
+
+# One-to-many and many-to-one agree with the scalar form (pgRouting q151-q153).
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10])
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10)
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', [6], [10])
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10)
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_dijkstra_cost, from docqueries/dijkstra/dijkstraCost.result
+# ---------------------------------------------------------------------------
+
+# pgRouting q2: 6 -> 10 directed costs 5.
+query IIR
+SELECT * FROM duckrouting_dijkstra_cost('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10, true);
+----
+6	10	5
+
+# The cost must equal the final agg_cost of the full path.
+query I
+SELECT count(*) FROM (
+  SELECT start_vid, end_vid, agg_cost
+  FROM duckrouting_dijkstra_cost('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10])
+  EXCEPT
+  SELECT start_vid, end_vid, max(agg_cost) OVER (PARTITION BY start_vid, end_vid)
+  FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10])
+);
+----
+0
+
+# Unreachable pairs contribute no row at all.
+query IIR
+SELECT * FROM duckrouting_dijkstra_cost('SELECT id, source, target, cost FROM edges', 6, 10);
+----
+
+# ---------------------------------------------------------------------------
+# duckrouting_dijkstra_cost_matrix
+# ---------------------------------------------------------------------------
+
+# Undirected over 4 vertices: 4*3 = 12 ordered pairs, all reachable here.
+query I
+SELECT count(*) FROM duckrouting_dijkstra_cost_matrix('SELECT id, source, target, cost, reverse_cost FROM edges', [5,6,10,15], false);
+----
+12
+
+# An undirected matrix must be symmetric.
+query I
+SELECT count(*) FROM (
+  SELECT a.start_vid, a.end_vid FROM
+    duckrouting_dijkstra_cost_matrix('SELECT id, source, target, cost, reverse_cost FROM edges', [5,6,10,15], false) a
+  JOIN
+    duckrouting_dijkstra_cost_matrix('SELECT id, source, target, cost, reverse_cost FROM edges', [5,6,10,15], false) b
+  ON a.start_vid = b.end_vid AND a.end_vid = b.start_vid
+  WHERE a.agg_cost <> b.agg_cost
+);
+----
+0
+
+# The matrix is exactly the cost function applied to one list against itself.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_dijkstra_cost_matrix('SELECT id, source, target, cost, reverse_cost FROM edges', [5,6,10,15])
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra_cost('SELECT id, source, target, cost, reverse_cost FROM edges', [5,6,10,15], [5,6,10,15])
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_driving_distance, from docqueries/driving_distance/
+# ---------------------------------------------------------------------------
+
+# pgRouting q5: everything within cost 3 of vertex 11 is a 13-node tree.
+query I
+SELECT count(*) FROM duckrouting_driving_distance('SELECT id, source, target, cost, reverse_cost FROM edges', 11, 3.0);
+----
+13
+
+# The root row is depth 0, its own predecessor, edge -1, cost 0.
+query IIIIRR
+SELECT depth, start_vid, pred, edge, cost, agg_cost
+FROM duckrouting_driving_distance('SELECT id, source, target, cost, reverse_cost FROM edges', 11, 3.0)
+WHERE node = 11;
+----
+0	11	11	-1	0	0
+
+# Depth counts hops and agg_cost never exceeds the limit.
+query IIR
+SELECT depth, count(*), max(agg_cost)
+FROM duckrouting_driving_distance('SELECT id, source, target, cost, reverse_cost FROM edges', 11, 3.0)
+GROUP BY depth ORDER BY depth;
+----
+0	1	0
+1	3	1
+2	5	2
+3	4	3
+
+# equicost assigns each node to whichever start reaches it most cheaply, so no
+# node may appear twice.
+query I
+SELECT count(*) FROM (
+  SELECT node FROM duckrouting_driving_distance('SELECT id, source, target, cost, reverse_cost FROM edges', [11,16], 3.0, equicost => true)
+  GROUP BY node HAVING count(*) > 1
+);
+----
+0
+
+# Without equicost a node reachable from both starts is reported for both.
+query I
+SELECT count(*) > 0 FROM (
+  SELECT node FROM duckrouting_driving_distance('SELECT id, source, target, cost, reverse_cost FROM edges', [11,16], 3.0)
+  GROUP BY node HAVING count(*) > 1
+);
+----
+true
+
+# A zero radius reaches only the start vertex itself.
+query I
+SELECT count(*) FROM duckrouting_driving_distance('SELECT id, source, target, cost, reverse_cost FROM edges', 11, 0.0);
 ----
 1
