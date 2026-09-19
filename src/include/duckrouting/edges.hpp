@@ -73,4 +73,18 @@ struct FlowEdgeRow {
 std::vector<FlowEdgeRow> LoadFlowEdges(duckdb::ClientContext &context, const std::string &edges_sql,
                                        bool require_capacity, bool require_cost);
 
+//! One row of an A* query: an ordinary edge plus the coordinates of its two
+//! endpoints, which the heuristic needs to estimate remaining distance.
+struct CoordinateEdgeRow {
+	EdgeRow edge;
+	double x1;
+	double y1;
+	double x2;
+	double y2;
+};
+
+//! Runs `edges_sql` and reads the usual columns plus x1, y1, x2, y2.
+std::vector<CoordinateEdgeRow> LoadCoordinateEdges(duckdb::ClientContext &context,
+                                                   const std::string &edges_sql);
+
 } // namespace duckrouting

@@ -176,4 +176,83 @@ std::vector<FlowEdgeRow> LoadFlowEdges(ClientContext &context, const string &edg
 	return edges;
 }
 
+std::vector<CoordinateEdgeRow> LoadCoordinateEdges(ClientContext &context, const string &edges_sql) {
+	Connection connection(DatabaseInstance::GetDatabase(context));
+
+	const string wrapped = "SELECT * FROM (" + edges_sql + ") AS __duckrouting_edges";
+	auto prepared = connection.Prepare(wrapped);
+	if (prepared->HasError()) {
+		throw BinderException("duckrouting: could not prepare the edges query: %s", prepared->GetError());
+	}
+
+	auto &names = prepared->GetNames();
+	RequireColumn(names, "id");
+	RequireColumn(names, "source");
+	RequireColumn(names, "target");
+	RequireColumn(names, "cost");
+	// The heuristic cannot work without knowing where the vertices are.
+	RequireColumn(names, "x1");
+	RequireColumn(names, "y1");
+	RequireColumn(names, "x2");
+	RequireColumn(names, "y2");
+	const bool has_reverse_cost = HasColumn(names, "reverse_cost");
+
+	string projection = "SELECT CAST(id AS BIGINT) AS id, CAST(source AS BIGINT) AS source, "
+	                    "CAST(target AS BIGINT) AS target, CAST(cost AS DOUBLE) AS cost, ";
+	projection += has_reverse_cost ? "CAST(reverse_cost AS DOUBLE) AS reverse_cost, "
+	                               : "CAST(-1 AS DOUBLE) AS reverse_cost, ";
+	projection += "CAST(x1 AS DOUBLE) AS x1, CAST(y1 AS DOUBLE) AS y1, CAST(x2 AS DOUBLE) AS x2, "
+	              "CAST(y2 AS DOUBLE) AS y2 FROM (" +
+	              edges_sql + ") AS __duckrouting_edges";
+
+	auto result = connection.Query(projection);
+	if (result->HasError()) {
+		throw InvalidInputException("duckrouting: the edges query failed: %s", result->GetError());
+	}
+
+	std::vector<CoordinateEdgeRow> edges;
+	while (true) {
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+		chunk->Flatten();
+		auto ids = FlatVector::GetData<int64_t>(chunk->data[0]);
+		auto sources = FlatVector::GetData<int64_t>(chunk->data[1]);
+		auto targets = FlatVector::GetData<int64_t>(chunk->data[2]);
+		auto costs = FlatVector::GetData<double>(chunk->data[3]);
+		auto reverse_costs = FlatVector::GetData<double>(chunk->data[4]);
+		auto x1 = FlatVector::GetData<double>(chunk->data[5]);
+		auto y1 = FlatVector::GetData<double>(chunk->data[6]);
+		auto x2 = FlatVector::GetData<double>(chunk->data[7]);
+		auto y2 = FlatVector::GetData<double>(chunk->data[8]);
+
+		for (duckdb::idx_t row = 0; row < chunk->size(); row++) {
+			for (duckdb::idx_t col = 0; col < 4; col++) {
+				if (!FlatVector::Validity(chunk->data[col]).RowIsValid(row)) {
+					throw InvalidInputException(
+					    "duckrouting: the edges query returned NULL in id, source, target or cost");
+				}
+			}
+			auto coordinate = [&](duckdb::idx_t col, const double *data) {
+				if (!FlatVector::Validity(chunk->data[col]).RowIsValid(row)) {
+					throw InvalidInputException("duckrouting: the edges query returned NULL in x1, y1, x2 or y2");
+				}
+				return data[row];
+			};
+			const double reverse_cost =
+			    FlatVector::Validity(chunk->data[4]).RowIsValid(row) ? reverse_costs[row] : -1.0;
+			CoordinateEdgeRow entry {};
+			entry.edge = EdgeRow {ids[row], sources[row], targets[row], EncodeInfinity(costs[row]),
+			                      EncodeInfinity(reverse_cost)};
+			entry.x1 = coordinate(5, x1);
+			entry.y1 = coordinate(6, y1);
+			entry.x2 = coordinate(7, x2);
+			entry.y2 = coordinate(8, y2);
+			edges.push_back(entry);
+		}
+	}
+	return edges;
+}
+
 } // namespace duckrouting

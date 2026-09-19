@@ -81,6 +81,10 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetMaxFlowMinCostCostFunction());
 	loader.RegisterFunction(duckrouting::GetEdgeDisjointPathsFunction());
 	loader.RegisterFunction(duckrouting::GetMaxCardinalityMatchFunction());
+
+	loader.RegisterFunction(duckrouting::GetAStarFunction());
+	loader.RegisterFunction(duckrouting::GetAStarCostFunction());
+	loader.RegisterFunction(duckrouting::GetAStarCostMatrixFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

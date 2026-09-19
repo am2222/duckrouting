@@ -202,6 +202,38 @@ std::vector<PathRow> EdgeDisjointPaths(const std::vector<FlowEdgeRow> &edges, co
 //! A maximum matching: as many edges as possible, no two sharing a vertex.
 std::vector<IdentifierRow> MaxCardinalityMatch(const std::vector<FlowEdgeRow> &edges);
 
+//! How A* estimates the remaining distance to a goal. These are pgRouting's
+//! numbering; 0 makes A* behave exactly like Dijkstra.
+enum class Heuristic {
+	None = 0,      //!< 0
+	MaxDelta = 1,  //!< |max(dx, dy)|
+	MinDelta = 2,  //!< |min(dx, dy)|
+	SquaredEuclidean = 3,
+	Euclidean = 4,
+	Manhattan = 5 //!< |dx| + |dy|, the default
+};
+
+//! Options shared by the three A* functions.
+struct AStarOptions {
+	bool directed = true;
+	Heuristic heuristic = Heuristic::Manhattan;
+	double factor = 1.0;
+	double epsilon = 1.0;
+};
+
+//! Shortest paths found with A*. Same result as Dijkstra given an admissible
+//! heuristic; the heuristic only changes how much of the graph is explored.
+std::vector<PathRow> AStar(const std::vector<CoordinateEdgeRow> &edges, const std::vector<int64_t> &starts,
+                           const std::vector<int64_t> &ends, const AStarOptions &options);
+
+//! Total cost per reachable pair.
+std::vector<CostRow> AStarCost(const std::vector<CoordinateEdgeRow> &edges, const std::vector<int64_t> &starts,
+                               const std::vector<int64_t> &ends, const AStarOptions &options);
+
+duckdb::TableFunctionSet GetAStarFunction();
+duckdb::TableFunctionSet GetAStarCostFunction();
+duckdb::TableFunctionSet GetAStarCostMatrixFunction();
+
 duckdb::TableFunctionSet GetMaxFlowFunction();
 duckdb::TableFunctionSet GetPushRelabelFunction();
 duckdb::TableFunctionSet GetEdmondsKarpFunction();

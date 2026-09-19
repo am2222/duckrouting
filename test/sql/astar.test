@@ -1,0 +1,171 @@
+# name: test/sql/astar.test
+# description: A* family vs pgRouting output
+# group: [duckrouting]
+#
+# Expected results from pgRouting docqueries/astar/. The edges query needs
+# x1, y1, x2, y2 so the heuristic can estimate remaining distance; coordinates
+# here are pgRouting's sample geometry with the endpoints read off directly.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE,
+                   x1 DOUBLE, y1 DOUBLE, x2 DOUBLE, y2 DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1, 2,0, 2,1),(2,6,10,-1,1, 2,1, 3,1),(3,10,15,-1,1, 3,1, 4,1),(4,6,7,1,1, 2,1, 2,2),
+ (5,10,11,1,-1, 3,1, 3,2),(6,1,3,1,1, 0,2, 1,2),(7,3,7,1,1, 1,2, 2,2),(8,7,11,1,1, 2,2, 3,2),
+ (9,11,16,1,1, 3,2, 4,2),(10,7,8,1,1, 2,2, 2,3),(11,11,12,1,-1, 3,2, 3,3),(12,8,12,1,-1, 2,3, 3,3),
+ (13,12,17,1,-1, 3,3, 4,3),(14,8,9,1,1, 2,3, 2,4),(15,16,17,1,1, 4,2, 4,3),(16,15,16,1,1, 4,1, 4,2),
+ (17,2,4,1,1, 0.5,3.5, 1.999999999999,3.5),(18,13,14,1,1, 3.5,2.3, 3.5,4);
+
+# ---------------------------------------------------------------------------
+# duckrouting_astar -- pgRouting q2
+# ---------------------------------------------------------------------------
+# KNOWN TIE: 6 -> 12 has two routes costing 3. pgRouting reports 6,7,8,12;
+# Boost reports 6,7,11,12. Assert the cost and the hop count, not the route.
+
+query IIIR
+SELECT count(*), min(start_vid), min(end_vid), max(agg_cost)
+FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+                       6, 12, directed => true, heuristic => 2);
+----
+4	6	12	3
+
+# pgRouting q3: one start, two ends, with a squared-Euclidean heuristic scaled
+# by a factor.
+query IIIIR
+SELECT path_seq, start_vid, end_vid, node, agg_cost
+FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+                       6, [10, 12], heuristic => 3, factor => 3.5)
+WHERE end_vid = 10;
+----
+1	6	10	6	0
+2	6	10	7	1
+3	6	10	11	2
+4	6	10	16	3
+5	6	10	15	4
+6	6	10	10	5
+
+# ---------------------------------------------------------------------------
+# A heuristic changes how much is explored, never the answer
+# ---------------------------------------------------------------------------
+# Every admissible heuristic must return the same cost. A DuckDB table function
+# argument has to be constant-foldable, so these are spelled out rather than
+# driven from a list of heuristic numbers.
+
+query R
+SELECT max(agg_cost) FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 6, 12, heuristic => 0);
+----
+3
+
+query R
+SELECT max(agg_cost) FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 6, 12, heuristic => 1);
+----
+3
+
+query R
+SELECT max(agg_cost) FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 6, 12, heuristic => 2);
+----
+3
+
+query R
+SELECT max(agg_cost) FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 6, 12, heuristic => 3);
+----
+3
+
+query R
+SELECT max(agg_cost) FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 6, 12, heuristic => 4);
+----
+3
+
+query R
+SELECT max(agg_cost) FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 6, 12, heuristic => 5);
+----
+3
+
+# heuristic 0 makes A* behave exactly like Dijkstra, so those must agree fully.
+query I
+SELECT count(*) FROM (
+  SELECT start_vid, end_vid, max(agg_cost) AS total
+  FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+                         [6,12], [7,10,17], heuristic => 0)
+  GROUP BY start_vid, end_vid
+  EXCEPT
+  SELECT start_vid, end_vid, max(agg_cost)
+  FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10,17])
+  GROUP BY start_vid, end_vid
+);
+----
+0
+
+# Undirected A* must likewise agree with undirected Dijkstra.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_astar_cost('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+                                       [6,12], [7,10], false)
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra_cost('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10], false)
+);
+----
+0
+
+# Every reported edge really joins its node to the next one.
+query I
+SELECT count(*) FROM (
+  SELECT a.node, a.edge, lead(a.node) OVER (PARTITION BY a.start_vid, a.end_vid ORDER BY a.path_seq) AS next_node
+  FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 6, [10,12,17]) a
+) p JOIN edges e ON e.id = p.edge
+WHERE p.next_node IS NOT NULL
+  AND NOT ((e.source = p.node AND e.target = p.next_node) OR (e.target = p.node AND e.source = p.next_node));
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_astar_cost and duckrouting_astar_cost_matrix
+# ---------------------------------------------------------------------------
+
+query IIR
+SELECT * FROM duckrouting_astar_cost('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 6, [10, 12]);
+----
+6	10	5
+6	12	3
+
+# Four vertices give twelve ordered pairs when all are mutually reachable.
+query I
+SELECT count(*) FROM duckrouting_astar_cost_matrix(
+  'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', [5,6,10,15], false);
+----
+12
+
+# The matrix is the cost function applied to one list against itself.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_astar_cost_matrix('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', [5,6,10,15])
+  EXCEPT
+  SELECT * FROM duckrouting_astar_cost('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', [5,6,10,15], [5,6,10,15])
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# Input validation
+# ---------------------------------------------------------------------------
+
+# The heuristic cannot work without coordinates.
+statement error
+SELECT * FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 12);
+----
+must expose a 'x1' column
+
+statement error
+SELECT * FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 6, 12, heuristic => 9);
+----
+'heuristic' must be between 0 and 5
+
+# An epsilon below 1 would shrink the heuristic; pgRouting rejects it too.
+statement error
+SELECT * FROM duckrouting_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 6, 12, epsilon => 0.5);
+----
+'epsilon' must be at least 1

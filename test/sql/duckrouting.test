@@ -24,6 +24,9 @@ WHERE function_name LIKE 'duckrouting_%' AND function_type = 'table'
 GROUP BY function_name ORDER BY function_name;
 ----
 duckrouting_articulation_points	1
+duckrouting_astar	8
+duckrouting_astar_cost	8
+duckrouting_astar_cost_matrix	2
 duckrouting_bandwidth	1
 duckrouting_bellman_ford	8
 duckrouting_betweenness_centrality	2

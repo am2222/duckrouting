@@ -28,7 +28,8 @@ set(EXTENSION_SOURCES
     src/traversal.cpp
     src/ordering.cpp
     src/analysis.cpp
-    src/flow.cpp)
+    src/flow.cpp
+    src/astar.cpp)
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
