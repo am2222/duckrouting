@@ -34,7 +34,7 @@
       Graph routing for DuckDB
     </text>
     <text x="78" y="222" font-size="17" font-weight="400" fill="#63739a">
-      90 pgRouting functions on the Boost Graph Library
+      Shortest paths, flow, spanning trees, contraction
     </text>
   </g>
 
