@@ -43,8 +43,8 @@ wrappers is unencumbered.
 | `pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix` | `astar_search` | |
 | `pgr_floydWarshall` | `floyd_warshall_all_pairs_shortest_paths` | `duckrouting_floyd_warshall` |
 | `pgr_johnson` | `johnson_all_pairs_shortest_paths` | `duckrouting_johnson` |
-| `pgr_bellmanFord`, `pgr_bellmanFord` (neg) | `bellman_ford_shortest_paths` | |
-| `pgr_dagShortestPath` | `dag_shortest_paths` | |
+| `pgr_bellmanFord` | `bellman_ford_shortest_paths` | `duckrouting_bellman_ford` |
+| `pgr_dagShortestPath` | `dag_shortest_paths` | `duckrouting_dag_shortest_path` |
 | `pgr_connectedComponents` | `connected_components` | `duckrouting_connected_components` |
 | `pgr_strongComponents` | `strong_components` | `duckrouting_strong_components` |
 | `pgr_biconnectedComponents` | `biconnected_components` | `duckrouting_biconnected_components` |
@@ -55,8 +55,8 @@ wrappers is unencumbered.
 | `pgr_kruskalBFS`, `pgr_kruskalDFS`, `pgr_kruskalDD` | `kruskal_minimum_spanning_tree` + traversal | `duckrouting_kruskal_bfs` / `_dfs` / `_dd` |
 | `pgr_prim` | `prim_minimum_spanning_tree` | `duckrouting_prim` |
 | `pgr_primBFS`, `pgr_primDFS`, `pgr_primDD` | `prim_minimum_spanning_tree` + traversal | `duckrouting_prim_bfs` / `_dfs` / `_dd` |
-| `pgr_breadthFirstSearch` | `breadth_first_search` | |
-| `pgr_depthFirstSearch` | `depth_first_search` / `undirected_dfs` | |
+| `pgr_breadthFirstSearch` | `breadth_first_search` | `duckrouting_breadth_first_search` |
+| `pgr_depthFirstSearch` | `depth_first_search` / `undirected_dfs` | `duckrouting_depth_first_search` |
 | `pgr_maxFlow`, `pgr_pushRelabel` | `push_relabel_max_flow` | |
 | `pgr_edmondsKarp` | `edmonds_karp_max_flow` | |
 | `pgr_boykovKolmogorov` | `boykov_kolmogorov_max_flow` | |
@@ -64,7 +64,7 @@ wrappers is unencumbered.
 | `pgr_maxFlowMinCost`, `pgr_maxFlowMinCost_Cost` | `successive_shortest_path_nonnegative_weights` + `find_flow_cost` | |
 | `pgr_maxCardinalityMatch` | `edmonds_maximum_cardinality_matching` | |
 | `pgr_stoerWagner` | `stoer_wagner_min_cut` | |
-| `pgr_transitiveClosure` | `transitive_closure` | |
+| `pgr_transitiveClosure` | `transitive_closure` | `duckrouting_transitive_closure` |
 | `pgr_lengauerTarjanDominatorTree` | `dominator_tree` | |
 | `pgr_hawickCircuits` | `hawick_circuits` | |
 | `pgr_bandwidth` | `bandwidth` | |
@@ -72,10 +72,10 @@ wrappers is unencumbered.
 | `pgr_sequentialVertexColoring` | `sequential_vertex_coloring` | |
 | `pgr_edgeColoring` | `edge_coloring` | |
 | `pgr_bipartite` | `is_bipartite` | |
-| `pgr_cuthillMckeeOrdering` | `cuthill_mckee_ordering` | |
-| `pgr_kingOrdering` | `king_ordering` | |
-| `pgr_sloanOrdering` | `sloan_ordering` | |
-| `pgr_topologicalSort` | `topological_sort` | |
+| `pgr_cuthillMckeeOrdering` | `cuthill_mckee_ordering` | `duckrouting_cuthill_mckee_ordering` |
+| `pgr_kingOrdering` | `king_ordering` | `duckrouting_king_ordering` |
+| `pgr_sloanOrdering` | `sloan_ordering` | `duckrouting_sloan_ordering` |
+| `pgr_topologicalSort` | `topological_sort` | `duckrouting_topological_sort` |
 | `pgr_boyerMyrvold`, `pgr_isPlanar` | `boyer_myrvold_planarity_test` | |
 | `pgr_TSP`, `pgr_TSPeuclidean` | `metric_tsp_approx_tour` | |
 | `pgr_contractionHierarchies` | `dijkstra_shortest_paths` over a CH `adjacency_list` | |
@@ -133,6 +133,13 @@ pgRouting's q93 and q133 ask for `12 -> 7` undirected. Two paths cost exactly
 equal-cost path wins, so this is not a defect in either implementation. The
 tests assert hop count, endpoints and total cost for those cases, plus a check
 that every reported edge really connects its two reported nodes.
+
+The vertex orderings are the same story: `cuthillMckee`, `king` and `sloan`
+return a permutation of the vertices, and the order among equal-degree vertices
+is implementation-defined. Boost emits Cuthill-McKee and King *reversed*;
+pgRouting undoes that by writing into `inv_permutation.rbegin()`, and so does
+duckrouting -- which is why both agree on the `13, 14, 2, 4` prefix even though
+the tails differ. A topological order is likewise not unique.
 
 The spanning-tree family has the strongest form of this: every edge in the
 sample graph costs 1, so the minimum spanning tree is massively non-unique --

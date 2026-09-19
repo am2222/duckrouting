@@ -3,6 +3,7 @@
 #include "duckdb.hpp"
 #include "duckrouting/dijkstra.hpp"
 #include "duckrouting/edges.hpp"
+#include "duckrouting/yen.hpp"
 
 #include <cstdint>
 #include <vector>
@@ -65,6 +66,36 @@ enum class Traversal {
 	DfsCost    //!< depth first, cut off by accumulated cost (the DD variants)
 };
 
+//! Walks `adjacency` from each root, emitting pgRouting's drivingDistance
+//! shape. Shared by the spanning-tree traversals and by breadth/depth first
+//! search over the whole graph -- the only difference is which adjacency is
+//! handed in.
+std::vector<DrivingDistanceRow> WalkGraph(const Adjacency &adjacency, const VertexIndex &index,
+                                          const std::vector<int64_t> &roots, Traversal traversal, double limit);
+
+//! Breadth or depth first search over the whole graph.
+std::vector<DrivingDistanceRow> GraphTraversal(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &roots,
+                                               Traversal traversal, double limit, bool directed);
+
+//! Shortest path via Bellman-Ford, which tolerates negative edge weights.
+std::vector<PathRow> BellmanFord(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                 const std::vector<int64_t> &ends, bool directed);
+
+//! Shortest path over a directed acyclic graph. Throws when the graph cycles.
+std::vector<PathRow> DagShortestPath(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                     const std::vector<int64_t> &ends);
+
+//! Every vertex reachable from each vertex.
+struct ClosureRow {
+	int64_t node;
+	std::vector<int64_t> targets;
+};
+std::vector<ClosureRow> TransitiveClosure(const std::vector<EdgeRow> &edges);
+
+//! Vertex orderings. `node` is the vertex, `seq` its position.
+enum class Ordering { CuthillMckee, King, Sloan, Topological };
+std::vector<IdentifierRow> VertexOrdering(const std::vector<EdgeRow> &edges, Ordering ordering);
+
 //! Minimum spanning forest of the undirected graph, by edge id.
 std::vector<SpanningEdgeRow> Kruskal(const std::vector<EdgeRow> &edges);
 std::vector<SpanningEdgeRow> Prim(const std::vector<EdgeRow> &edges);
@@ -74,6 +105,16 @@ std::vector<SpanningEdgeRow> Prim(const std::vector<EdgeRow> &edges);
 std::vector<DrivingDistanceRow> SpanningTraversal(const std::vector<EdgeRow> &edges, bool use_prim,
                                                   const std::vector<int64_t> &roots, Traversal traversal,
                                                   double limit);
+
+duckdb::TableFunctionSet GetBreadthFirstSearchFunction();
+duckdb::TableFunctionSet GetDepthFirstSearchFunction();
+duckdb::TableFunctionSet GetBellmanFordFunction();
+duckdb::TableFunctionSet GetDagShortestPathFunction();
+duckdb::TableFunctionSet GetTransitiveClosureFunction();
+duckdb::TableFunctionSet GetCuthillMckeeOrderingFunction();
+duckdb::TableFunctionSet GetKingOrderingFunction();
+duckdb::TableFunctionSet GetSloanOrderingFunction();
+duckdb::TableFunctionSet GetTopologicalSortFunction();
 
 duckdb::TableFunctionSet GetKruskalFunction();
 duckdb::TableFunctionSet GetPrimFunction();

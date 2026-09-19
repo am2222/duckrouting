@@ -51,6 +51,16 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetPrimBFSFunction());
 	loader.RegisterFunction(duckrouting::GetPrimDFSFunction());
 	loader.RegisterFunction(duckrouting::GetPrimDDFunction());
+
+	loader.RegisterFunction(duckrouting::GetBreadthFirstSearchFunction());
+	loader.RegisterFunction(duckrouting::GetDepthFirstSearchFunction());
+	loader.RegisterFunction(duckrouting::GetBellmanFordFunction());
+	loader.RegisterFunction(duckrouting::GetDagShortestPathFunction());
+	loader.RegisterFunction(duckrouting::GetTransitiveClosureFunction());
+	loader.RegisterFunction(duckrouting::GetCuthillMckeeOrderingFunction());
+	loader.RegisterFunction(duckrouting::GetKingOrderingFunction());
+	loader.RegisterFunction(duckrouting::GetSloanOrderingFunction());
+	loader.RegisterFunction(duckrouting::GetTopologicalSortFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

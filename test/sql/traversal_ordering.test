@@ -1,0 +1,290 @@
+# name: test/sql/traversal_ordering.test
+# description: BFS/DFS, bellmanFord, dagShortestPath, transitive closure and orderings
+# group: [duckrouting]
+#
+# Expected results from pgRouting docqueries/traversal/, bellman_ford/,
+# dagShortestPath/, transitiveClosure/ and ordering/.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# ---------------------------------------------------------------------------
+# duckrouting_breadth_first_search -- pgRouting q1, root 6
+# ---------------------------------------------------------------------------
+
+query IIIIIRR
+SELECT seq, depth, pred, node, edge, cost, agg_cost
+FROM duckrouting_breadth_first_search('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6);
+----
+1	0	6	6	-1	0	0
+2	1	6	5	1	1	1
+3	1	6	7	4	1	1
+4	2	7	3	7	1	2
+5	2	7	11	8	1	2
+6	2	7	8	10	1	2
+7	3	3	1	6	1	3
+8	3	11	16	9	1	3
+9	3	11	12	11	1	3
+10	3	8	9	14	1	3
+11	4	16	17	15	1	4
+12	4	16	15	16	1	4
+13	5	15	10	3	1	5
+
+# Breadth first means depth never decreases.
+query I
+SELECT count(*) FROM (
+  SELECT depth, lag(depth) OVER (ORDER BY seq) AS previous
+  FROM duckrouting_breadth_first_search('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6)
+) WHERE previous IS NOT NULL AND depth < previous;
+----
+0
+
+# max_depth truncates.
+query I
+SELECT count(*) FROM duckrouting_breadth_first_search('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6, 2);
+----
+6
+
+# Undirected reaches vertex 10 directly via edge 2, which the directed walk
+# could not use.
+query I
+SELECT depth FROM duckrouting_breadth_first_search('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6, directed => false)
+WHERE node = 10;
+----
+1
+
+# ---------------------------------------------------------------------------
+# duckrouting_depth_first_search -- pgRouting q1, root 6
+# ---------------------------------------------------------------------------
+
+query IIIIIRR
+SELECT seq, depth, pred, node, edge, cost, agg_cost
+FROM duckrouting_depth_first_search('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6);
+----
+1	0	6	6	-1	0	0
+2	1	6	5	1	1	1
+3	1	6	7	4	1	1
+4	2	7	3	7	1	2
+5	3	3	1	6	1	3
+6	2	7	11	8	1	2
+7	3	11	16	9	1	3
+8	4	16	17	15	1	4
+9	4	16	15	16	1	4
+10	5	15	10	3	1	5
+11	3	11	12	11	1	3
+12	2	7	8	10	1	2
+13	3	8	9	14	1	3
+
+# Both searches reach the same vertices; only the order differs.
+query I
+SELECT count(*) FROM (
+  SELECT node FROM duckrouting_breadth_first_search('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6)
+  EXCEPT
+  SELECT node FROM duckrouting_depth_first_search('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6)
+);
+----
+0
+
+# Depth first does backtrack.
+query I
+SELECT count(*) > 0 FROM (
+  SELECT depth, lag(depth) OVER (ORDER BY seq) AS previous
+  FROM duckrouting_depth_first_search('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6)
+) WHERE previous IS NOT NULL AND depth < previous;
+----
+true
+
+# ---------------------------------------------------------------------------
+# duckrouting_bellman_ford -- pgRouting q2
+# ---------------------------------------------------------------------------
+
+query IIIIIIRR
+SELECT * FROM duckrouting_bellman_ford('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10, true);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	9	1	2
+4	4	6	10	16	16	1	3
+5	5	6	10	15	3	1	4
+6	6	6	10	10	-1	0	5
+
+# With non-negative weights Bellman-Ford must agree with Dijkstra.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_bellman_ford('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10])
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10])
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_dag_shortest_path -- pgRouting q2
+# ---------------------------------------------------------------------------
+
+query IIIIIIRR
+SELECT * FROM duckrouting_dag_shortest_path('SELECT id, source, target, cost FROM edges', 5, 11);
+----
+1	1	5	11	5	1	1	0
+2	2	5	11	6	4	1	1
+3	3	5	11	7	8	1	2
+4	4	5	11	11	-1	0	3
+
+# pgRouting q3: one start, several ends.
+query IIII
+SELECT path_seq, start_vid, end_vid, node
+FROM duckrouting_dag_shortest_path('SELECT id, source, target, cost FROM edges', 5, [7, 11]);
+----
+1	5	7	5
+2	5	7	6
+3	5	7	7
+1	5	11	5
+2	5	11	6
+3	5	11	7
+4	5	11	11
+
+# A graph with a cycle is not a DAG, and saying so beats a wrong answer.
+statement error
+SELECT * FROM duckrouting_dag_shortest_path('SELECT id, source, target, cost, reverse_cost FROM edges', 5, 11);
+----
+not a DAG
+
+# ---------------------------------------------------------------------------
+# duckrouting_transitive_closure -- pgRouting q1
+# ---------------------------------------------------------------------------
+# pgRouting emits the target arrays in Boost's internal order; we sort them, so
+# the sets match but the element order is ours.
+
+query IT
+SELECT * FROM duckrouting_transitive_closure(
+  'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (2, 3, 5, 11, 12, 13, 15)')
+ORDER BY node;
+----
+6	[]
+8	[12, 16, 17]
+10	[6, 11, 12, 16, 17]
+11	[12, 16, 17]
+12	[16, 17]
+15	[6, 10, 11, 12, 16, 17]
+16	[16, 17]
+17	[16, 17]
+
+# Anything in a node's closure must really be reachable from it.
+query I
+SELECT count(*) FROM (
+  SELECT t.node, unnest(t.targets) AS reachable
+  FROM duckrouting_transitive_closure('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (2,3,5,11,12,13,15)') t
+) c
+WHERE NOT EXISTS (
+  SELECT 1 FROM duckrouting_dijkstra_cost(
+    'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (2,3,5,11,12,13,15)',
+    [6,8,10,11,12,15,16,17], [6,8,10,11,12,15,16,17]) d
+  WHERE d.start_vid = c.node AND d.end_vid = c.reachable)
+  AND c.node <> c.reachable;
+----
+0
+
+# ---------------------------------------------------------------------------
+# Orderings
+# ---------------------------------------------------------------------------
+# KNOWN TIE: these return a permutation of the vertices, and the order among
+# equal-degree vertices is implementation-defined. Boost emits Cuthill-McKee and
+# King reversed; pgRouting undoes that by writing into rbegin(), and so do we --
+# which is why both agree on the 13, 14, 2, 4 prefix even though the tails
+# differ. Assert the permutation property, not a fixed sequence.
+
+query I
+SELECT count(*) FROM duckrouting_cuthill_mckee_ordering('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+17
+
+# Every vertex appears exactly once, and nothing else does.
+query I
+SELECT count(*) FROM (
+  SELECT node FROM duckrouting_cuthill_mckee_ordering('SELECT id, source, target, cost, reverse_cost FROM edges')
+  EXCEPT
+  SELECT v FROM (SELECT source AS v FROM edges UNION SELECT target FROM edges)
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT node FROM duckrouting_king_ordering('SELECT id, source, target, cost, reverse_cost FROM edges')
+  GROUP BY node HAVING count(*) > 1
+);
+----
+0
+
+# Cuthill-McKee and King agree on the reversal convention pgRouting uses.
+query T
+SELECT list(node ORDER BY seq)[1:4] FROM duckrouting_cuthill_mckee_ordering('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+[13, 14, 2, 4]
+
+query T
+SELECT list(node ORDER BY seq)[1:4] FROM duckrouting_king_ordering('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+[13, 14, 2, 4]
+
+# Sloan starts from a pseudo-peripheral pair and so covers a single component,
+# which is 13 of the 17 vertices here. pgRouting returns 13 rows too.
+query I
+SELECT count(*) FROM duckrouting_sloan_ordering('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+13
+
+# ---------------------------------------------------------------------------
+# duckrouting_topological_sort
+# ---------------------------------------------------------------------------
+
+# pgRouting q1 orients every edge forwards first. The result is a valid
+# topological order, though not the only one.
+query I
+SELECT count(*) FROM duckrouting_topological_sort(
+  $$SELECT id, source, target, cost FROM edges WHERE cost >= 0
+    UNION SELECT id, target, source, reverse_cost FROM edges WHERE cost < 0$$);
+----
+17
+
+# The defining property: every edge runs from an earlier position to a later one.
+# The DAG is materialised first: a topological order is not unique, so calling
+# the function twice on an unordered UNION could legitimately return two
+# different valid orders, and comparing positions across them would be
+# meaningless.
+statement ok
+CREATE TABLE dag AS
+  SELECT id, source, target, cost FROM edges WHERE cost >= 0
+  UNION
+  SELECT id, target, source, reverse_cost FROM edges WHERE cost < 0;
+
+statement ok
+CREATE TABLE sorted AS SELECT * FROM duckrouting_topological_sort('SELECT id, source, target, cost FROM dag');
+
+query I
+SELECT count(*) FROM dag e
+JOIN sorted a ON a.node = e.source
+JOIN sorted b ON b.node = e.target
+WHERE a.seq >= b.seq;
+----
+0
+
+# Every vertex of the DAG is placed exactly once.
+query I
+SELECT count(*) FROM sorted;
+----
+17
+
+# A cyclic graph has no topological order at all.
+statement error
+SELECT * FROM duckrouting_topological_sort('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+not a DAG

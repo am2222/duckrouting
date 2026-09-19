@@ -1,6 +1,7 @@
 #include "duckrouting/graph_functions.hpp"
 
 #include "duckrouting/graph.hpp"
+#include "duckrouting/yen.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -18,14 +19,6 @@
 namespace duckrouting {
 
 namespace {
-
-//! One side of a spanning-tree edge, kept in edge-id order so that traversals
-//! visit neighbours the same way pgRouting's do.
-struct TreeArc {
-	uint64_t to;
-	int64_t edge;
-	double cost;
-};
 
 //! Cheapest cost recorded for an edge id, so a tree edge reports the weight
 //! that actually got it selected.
@@ -123,9 +116,9 @@ std::set<int64_t> SpanningEdgeIds(const UndirectedGraph &graph, const VertexInde
 }
 
 //! Adjacency of the spanning forest only, in edge-id order.
-std::vector<std::vector<TreeArc>> TreeAdjacency(const std::vector<EdgeRow> &edges, const VertexIndex &index,
+Adjacency TreeAdjacency(const std::vector<EdgeRow> &edges, const VertexIndex &index,
                                                 const std::set<int64_t> &chosen) {
-	std::vector<std::vector<TreeArc>> adjacency(index.Size());
+	Adjacency adjacency(index.Size());
 	std::vector<EdgeRow> ordered(edges);
 	std::stable_sort(ordered.begin(), ordered.end(),
 	                 [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
@@ -145,8 +138,8 @@ std::vector<std::vector<TreeArc>> TreeAdjacency(const std::vector<EdgeRow> &edge
 			cost = (std::min)(edge.cost, edge.reverse_cost);
 		}
 		// A spanning tree is undirected, so both ends carry the arc.
-		adjacency[source].push_back(TreeArc {target, edge.id, cost});
-		adjacency[target].push_back(TreeArc {source, edge.id, cost});
+		adjacency[source].push_back(Arc {target, edge.id, cost});
+		adjacency[target].push_back(Arc {source, edge.id, cost});
 	}
 	return adjacency;
 }
@@ -177,74 +170,8 @@ std::vector<DrivingDistanceRow> SpanningTraversal(const std::vector<EdgeRow> &ed
 	std::sort(ordered_roots.begin(), ordered_roots.end());
 	ordered_roots.erase(std::unique(ordered_roots.begin(), ordered_roots.end()), ordered_roots.end());
 
-	std::vector<DrivingDistanceRow> rows;
-	for (size_t r = 0; r < ordered_roots.size(); r++) {
-		const int64_t root_id = ordered_roots[r];
-		uint64_t root = 0;
-		if (!index.Find(root_id, root)) {
-			// pgRouting still reports a lone row for a root outside the graph.
-			rows.push_back(DrivingDistanceRow {0, root_id, root_id, root_id, -1, 0, 0});
-			continue;
-		}
-
-		std::vector<bool> seen(index.Size(), false);
-
-		// Each pending entry carries everything the output row needs.
-		struct Pending {
-			uint64_t vertex;
-			int64_t pred;
-			int64_t edge;
-			double cost;
-			int64_t depth;
-			double agg_cost;
-		};
-		std::deque<Pending> queue;
-		queue.push_back(Pending {root, root_id, -1, 0, 0, 0});
-
-		while (!queue.empty()) {
-			Pending current;
-			if (traversal == Traversal::Bfs) {
-				current = queue.front();
-				queue.pop_front();
-			} else {
-				current = queue.back();
-				queue.pop_back();
-			}
-			if (seen[current.vertex]) {
-				continue;
-			}
-			seen[current.vertex] = true;
-
-			rows.push_back(DrivingDistanceRow {current.depth, root_id, current.pred, index.IdOf(current.vertex),
-			                                   current.edge, DecodeInfinity(current.cost),
-			                                   DecodeInfinity(current.agg_cost)});
-
-			// Children are pushed in edge-id order; a stack needs them
-			// reversed so they come back off in that same order.
-			const std::vector<TreeArc> &neighbours = adjacency[current.vertex];
-			for (size_t i = 0; i < neighbours.size(); i++) {
-				const TreeArc &arc =
-				    traversal == Traversal::Bfs ? neighbours[i] : neighbours[neighbours.size() - 1 - i];
-				if (seen[arc.to]) {
-					continue;
-				}
-				const int64_t depth = current.depth + 1;
-				const double agg_cost = current.agg_cost + arc.cost;
-				if (traversal == Traversal::DfsCost) {
-					if (agg_cost > limit) {
-						continue;
-					}
-				} else if (static_cast<double>(depth) > limit) {
-					continue;
-				}
-				queue.push_back(
-				    Pending {arc.to, index.IdOf(current.vertex), arc.edge, arc.cost, depth, agg_cost});
-			}
-		}
-	}
-	return rows;
+	return WalkGraph(adjacency, index, ordered_roots, traversal, limit);
 }
-
 
 // ---------------------------------------------------------------------------
 // DuckDB table function bindings

@@ -16,17 +16,22 @@ SELECT duckrouting_version('Sam') ILIKE 'Duckrouting Sam, built against Boost %'
 ----
 true
 
-# Every routing function is registered, each with overloads for scalar and
-# array vertex arguments, with and without the trailing `directed` flag.
+# Every routing function is registered. The count is the number of overloads:
+# scalar and array vertex arguments, with and without trailing flags.
 query TI
 SELECT function_name, count(*) FROM duckdb_functions()
 WHERE function_name LIKE 'duckrouting_%' AND function_type = 'table'
 GROUP BY function_name ORDER BY function_name;
 ----
 duckrouting_articulation_points	1
+duckrouting_bellman_ford	8
 duckrouting_biconnected_components	1
+duckrouting_breadth_first_search	4
 duckrouting_bridges	1
 duckrouting_connected_components	1
+duckrouting_cuthill_mckee_ordering	1
+duckrouting_dag_shortest_path	4
+duckrouting_depth_first_search	4
 duckrouting_dijkstra	8
 duckrouting_dijkstra_cost	8
 duckrouting_dijkstra_cost_matrix	2
@@ -36,6 +41,7 @@ duckrouting_dijkstra_via	4
 duckrouting_driving_distance	4
 duckrouting_floyd_warshall	2
 duckrouting_johnson	2
+duckrouting_king_ordering	1
 duckrouting_kruskal	1
 duckrouting_kruskal_bfs	4
 duckrouting_kruskal_dd	2
@@ -46,4 +52,7 @@ duckrouting_prim	1
 duckrouting_prim_bfs	4
 duckrouting_prim_dd	2
 duckrouting_prim_dfs	4
+duckrouting_sloan_ordering	1
 duckrouting_strong_components	1
+duckrouting_topological_sort	1
+duckrouting_transitive_closure	1
