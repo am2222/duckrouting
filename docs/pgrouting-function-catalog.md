@@ -94,7 +94,7 @@ wrappers is unencumbered.
 | `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix` | same hand-written bidirectional base, plus a heuristic | `duckrouting_bd_astar`, `duckrouting_bd_astar_cost`, `duckrouting_bd_astar_cost_matrix` |
 | `pgr_KSP` | `include/yen/ksp.hpp` -- own Yen's algorithm. Reimplemented independently as `duckrouting_ksp`; Boost has no k-shortest-paths routine | `duckrouting_ksp` |
 | `pgr_withPointsKSP`, `pgr_turnRestrictedPath` | Yen over the withPoints / turn-restriction graphs | `duckrouting_with_points_ksp` |
-| `pgr_trsp`, `pgr_trspVia`, `pgr_trsp_withPoints`, `pgr_trspVia_withPoints` | `trsp/trspHandler.cpp` -- own turn-restriction search. Zero `boost::` symbols |  |
+| `pgr_trsp`, `pgr_trspVia`, `pgr_trsp_withPoints`, `pgr_trspVia_withPoints` | `trsp/trspHandler.cpp` -- own turn-restriction search. Zero `boost::` symbols | `duckrouting_trsp`, `duckrouting_trsp_via`, `duckrouting_trsp_with_points`, `duckrouting_trsp_via_with_points` |
 | `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`, `pgr_withPointsVia` | own edge-splitting graph rewrite, then delegates | `duckrouting_with_points`, `duckrouting_with_points_cost`, `duckrouting_with_points_cost_matrix`, `duckrouting_with_points_via` |
 | `pgr_edwardMoore` | own SPFA; Boost only for edge iteration | `duckrouting_edward_moore` |
 | `pgr_binaryBreadthFirstSearch` | own 0-1 BFS; Boost only for edge iteration | `duckrouting_binary_breadth_first_search` |

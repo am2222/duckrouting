@@ -114,6 +114,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetDeadEndContractionFunction());
 	loader.RegisterFunction(duckrouting::GetLinearContractionFunction());
 
+	loader.RegisterFunction(duckrouting::GetTrspFunction());
+	loader.RegisterFunction(duckrouting::GetTrspViaFunction());
+	loader.RegisterFunction(duckrouting::GetTrspWithPointsFunction());
+	loader.RegisterFunction(duckrouting::GetTrspViaWithPointsFunction());
+
 	loader.RegisterFunction(duckrouting::GetLineGraphFunction());
 	loader.RegisterFunction(duckrouting::GetLineGraphFullFunction());
 	loader.RegisterFunction(duckrouting::GetChinesePostmanFunction());

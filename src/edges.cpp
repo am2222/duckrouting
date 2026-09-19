@@ -410,8 +410,7 @@ std::vector<Restriction> LoadRestrictions(ClientContext &context, const string &
 
 	auto prepared = connection.Prepare("SELECT * FROM (" + restrictions_sql + ") AS __duckrouting_restrictions");
 	if (prepared->HasError()) {
-		throw BinderException("duckrouting: could not prepare the restrictions query: %s",
-		                      prepared->GetError());
+		throw BinderException("duckrouting: could not prepare the restrictions query: %s", prepared->GetError());
 	}
 	auto &names = prepared->GetNames();
 	RequireColumn(names, "path");
