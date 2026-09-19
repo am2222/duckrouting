@@ -84,11 +84,18 @@ struct KspRow {
 	double agg_cost;
 };
 
-//! Routes through `via_vids` in order, one leg per consecutive pair. A leg with
-//! no path contributes no rows and the route continues from the next via
-//! vertex. The final leg's last row is terminated with edge -2 rather than -1.
+//! Routes through `via_vids` in order, one leg per consecutive pair. The final
+//! leg's last row is terminated with edge -2 rather than -1.
+//!
+//! With `strict`, a leg that cannot be routed abandons the whole route and
+//! returns nothing; otherwise that leg emits no rows, still consumes a
+//! path_id, and the route continues from the next via vertex.
+//!
+//! With `u_turn_on_edge` false, a leg may not leave a via vertex by the edge
+//! the previous leg arrived on, unless the vertex is a dead end or the
+//! restriction would make the next vertex unreachable.
 std::vector<ViaRow> DijkstraVia(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &via_vids,
-                                bool directed);
+                                bool directed, bool strict, bool u_turn_on_edge);
 
 //! The `cap` cheapest (start, end) pairs, as full paths.
 std::vector<PathRow> DijkstraNear(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,

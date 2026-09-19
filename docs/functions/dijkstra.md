@@ -197,7 +197,9 @@ specific tie-break; assert on `agg_cost`.
 ```sql
 TABLE duckrouting_dijkstra_via (edges_sql VARCHAR, via_vids BIGINT[])
 TABLE duckrouting_dijkstra_via (edges_sql VARCHAR, via_vids BIGINT[], directed BOOLEAN)
--- also accepts directed => BOOLEAN
+TABLE duckrouting_dijkstra_via (edges_sql VARCHAR, via_vids BIGINT[], directed BOOLEAN, strict BOOLEAN)
+TABLE duckrouting_dijkstra_via (edges_sql VARCHAR, via_vids BIGINT[], directed BOOLEAN, strict BOOLEAN, u_turn_on_edge BOOLEAN)
+-- also accepts directed => , strict => and u_turn_on_edge => BOOLEAN
 ```
 
 ### Description
@@ -211,8 +213,18 @@ Returns `seq`, `path_id`, `path_seq`, `start_vid`, `end_vid`, `node`, `edge`,
 carries `edge = -1`, except the last leg of the route, which carries `-2` --
 that is how pgRouting marks the end of the journey rather than the end of a leg.
 
-A leg with no path contributes no rows and the route continues from the next
-via vertex.
+**`strict`** (default `false`) decides what happens when a leg cannot be
+routed. Left `false`, that leg emits no rows and the route carries on from the
+next via vertex -- the leg still consumes its `path_id`, so the numbering stays
+aligned with the via sequence and you can see which leg was dropped. Set
+`true`, a single unroutable leg abandons the whole route and nothing is
+returned.
+
+**`u_turn_on_edge`** (default `true`) decides whether a leg may leave a via
+vertex by the same edge the previous leg arrived on. Set `false` to suppress
+that doubling-back. The restriction is lifted when the via vertex is a dead end,
+or when honouring it would make the next vertex unreachable -- a longer route is
+preferred to no route.
 
 ### Example
 
@@ -232,6 +244,30 @@ FROM duckrouting_dijkstra_via(
 -- →       2     7    10       2.0             6.0
 -- →       2     8    -2       3.0             7.0
 ```
+
+Suppressing the U-turn sends leg 2 the long way round instead of doubling back
+along edge 4:
+
+```sql
+SELECT path_id, node, edge, route_agg_cost
+FROM duckrouting_dijkstra_via(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  [5, 7, 5], u_turn_on_edge => false);
+-- → path_id  node  edge  route_agg_cost
+-- →       1     5     1             0.0
+-- →       1     6     4             1.0
+-- →       1     7    -1             2.0
+-- →       2     7     8             2.0
+-- →       2    11     9             3.0
+-- →       2    16    16             4.0
+-- →       2    15     3             5.0
+-- →       2    10     2             6.0
+-- →       2     6     1             7.0
+-- →       2     5    -2             8.0
+```
+
+With the default `u_turn_on_edge => true` that same leg 2 is simply
+`7 -(4)-> 6 -(1)-> 5`, for a route total of 4.
 
 The total for the whole route is the `route_agg_cost` on the `-2` row:
 

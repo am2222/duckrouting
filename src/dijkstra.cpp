@@ -291,49 +291,147 @@ std::vector<DrivingDistanceRow> DrivingDistance(const std::vector<EdgeRow> &edge
 	return rows;
 }
 
+namespace {
+
+//! How many arcs leave `vertex`, used for pgRouting's dead-end check: a vertex
+//! with only one way out cannot be denied its U-turn.
+size_t OutDegree(const std::vector<EdgeRow> &edges, int64_t vertex, bool directed) {
+	size_t degree = 0;
+	for (size_t i = 0; i < edges.size(); i++) {
+		const EdgeRow &edge = edges[i];
+		if (edge.source == vertex) {
+			if (IsTraversable(edge.cost)) {
+				degree++;
+			}
+			if (!directed && IsTraversable(edge.reverse_cost)) {
+				degree++;
+			}
+		}
+		if (edge.target == vertex) {
+			if (IsTraversable(edge.reverse_cost)) {
+				degree++;
+			}
+			if (!directed && IsTraversable(edge.cost)) {
+				degree++;
+			}
+		}
+	}
+	return degree;
+}
+
+//! Withdraws the arc that leaves `vertex` along `edge_id`. A negative cost
+//! already means "no edge in that direction", so suppressing an arc is just a
+//! matter of handing the solver a doctored edge list -- no second shortest-path
+//! implementation, and therefore no second tie-breaking rule.
+std::vector<EdgeRow> WithoutArc(const std::vector<EdgeRow> &edges, int64_t vertex, int64_t edge_id, bool directed) {
+	std::vector<EdgeRow> copy(edges);
+	for (size_t i = 0; i < copy.size(); i++) {
+		if (copy[i].id != edge_id) {
+			continue;
+		}
+		if (directed) {
+			if (copy[i].source == vertex) {
+				copy[i].cost = -1;
+			} else if (copy[i].target == vertex) {
+				copy[i].reverse_cost = -1;
+			}
+		} else if (copy[i].source == vertex || copy[i].target == vertex) {
+			// Undirected: the edge is usable from either end, so the whole
+			// edge has to go.
+			copy[i].cost = -1;
+			copy[i].reverse_cost = -1;
+		}
+	}
+	return copy;
+}
+
+} // namespace
+
 std::vector<ViaRow> DijkstraVia(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &via_vids,
-                                bool directed) {
+                                bool directed, bool strict, bool u_turn_on_edge) {
 	std::vector<ViaRow> rows;
 	if (via_vids.size() < 2) {
 		return rows;
 	}
 
-	// Collect the legs first, so we know which one is last and therefore which
-	// row carries pgRouting's -2 terminator.
-	std::vector<std::vector<PathRow>> legs;
-	for (size_t i = 0; i + 1 < via_vids.size(); i++) {
-		std::vector<int64_t> from(1, via_vids[i]);
-		std::vector<int64_t> to(1, via_vids[i + 1]);
-		auto leg = Dijkstra(edges, from, to, directed);
-		// An unreachable leg contributes nothing and the route carries on from
-		// the next via vertex.
-		if (!leg.empty()) {
-			legs.push_back(leg);
+	// An unreachable leg still occupies a path_id, so the numbering keeps
+	// lining up with the via sequence. Empty legs simply emit no rows.
+	std::vector<std::vector<PathRow>> legs(via_vids.size() - 1);
+	std::vector<bool> found(via_vids.size() - 1, false);
+
+	for (size_t leg = 0; leg + 1 < via_vids.size(); leg++) {
+		std::vector<int64_t> from(1, via_vids[leg]);
+		std::vector<int64_t> to(1, via_vids[leg + 1]);
+
+		std::vector<PathRow> path;
+		bool suppressed_u_turn = false;
+
+		// From the second leg onwards, leaving by the edge we arrived on is a
+		// U-turn -- unless this vertex is a dead end, where there is nothing
+		// else to do.
+		if (!u_turn_on_edge && leg > 0 && found[leg - 1]) {
+			const std::vector<PathRow> &previous = legs[leg - 1];
+			if (previous.size() > 1 && OutDegree(edges, via_vids[leg], directed) > 1) {
+				const int64_t arriving_edge = previous[previous.size() - 2].edge;
+				auto trimmed = WithoutArc(edges, via_vids[leg], arriving_edge, directed);
+				path = Dijkstra(trimmed, from, to, directed);
+				suppressed_u_turn = true;
+			}
 		}
+
+		// Either no suppression applied, or suppressing it made the next
+		// vertex unreachable, in which case pgRouting allows the U-turn back.
+		if (!suppressed_u_turn || path.empty()) {
+			path = Dijkstra(edges, from, to, directed);
+		}
+
+		if (path.empty()) {
+			if (strict) {
+				return rows;
+			}
+			continue;
+		}
+		legs[leg] = path;
+		found[leg] = true;
+	}
+
+	// The -2 terminator belongs to the last leg that actually produced a path.
+	size_t last_found = 0;
+	bool any = false;
+	for (size_t leg = 0; leg < found.size(); leg++) {
+		if (found[leg]) {
+			last_found = leg;
+			any = true;
+		}
+	}
+	if (!any) {
+		return rows;
 	}
 
 	double route_agg_cost = 0;
-	for (size_t l = 0; l < legs.size(); l++) {
-		const bool last_leg = (l + 1 == legs.size());
-		const std::vector<PathRow> &leg = legs[l];
-		for (size_t i = 0; i < leg.size(); i++) {
+	for (size_t leg = 0; leg < legs.size(); leg++) {
+		if (!found[leg]) {
+			continue;
+		}
+		const std::vector<PathRow> &path = legs[leg];
+		for (size_t i = 0; i < path.size(); i++) {
 			ViaRow row {};
-			row.path_id = static_cast<int64_t>(l) + 1;
-			row.path_seq = leg[i].path_seq;
-			row.start_vid = leg[i].start_vid;
-			row.end_vid = leg[i].end_vid;
-			row.node = leg[i].node;
-			row.edge = leg[i].edge;
-			row.cost = leg[i].cost;
-			row.agg_cost = leg[i].agg_cost;
-			row.route_agg_cost = route_agg_cost + leg[i].agg_cost;
-			if (last_leg && i + 1 == leg.size()) {
+			row.path_id = static_cast<int64_t>(leg) + 1;
+			row.path_seq = path[i].path_seq;
+			row.start_vid = path[i].start_vid;
+			row.end_vid = path[i].end_vid;
+			row.node = path[i].node;
+			row.edge = path[i].edge;
+			row.cost = path[i].cost;
+			row.agg_cost = path[i].agg_cost;
+			row.route_agg_cost = route_agg_cost + path[i].agg_cost;
+			if (leg == last_found && i + 1 == path.size()) {
 				// pgRouting closes the whole route with -2 rather than -1.
 				row.edge = -2;
 			}
 			rows.push_back(row);
 		}
-		route_agg_cost += leg.back().agg_cost;
+		route_agg_cost += path.back().agg_cost;
 	}
 	return rows;
 }

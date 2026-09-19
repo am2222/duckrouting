@@ -81,6 +81,88 @@ SELECT count(*) FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, 
 0
 
 # ---------------------------------------------------------------------------
+# strict and u_turn_on_edge
+# ---------------------------------------------------------------------------
+
+# By default a U-turn is allowed: leg 2 retraces edge 4 straight back.
+query IIIR
+SELECT path_id, node, edge, route_agg_cost
+FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,7,5]);
+----
+1	5	1	0
+1	6	4	1
+1	7	-1	2
+2	7	4	2
+2	6	1	3
+2	5	-2	4
+
+# u_turn_on_edge => false withdraws the arriving edge, forcing the long way
+# round rather than doubling back.
+query IIIR
+SELECT path_id, node, edge, route_agg_cost
+FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,7,5], u_turn_on_edge => false);
+----
+1	5	1	0
+1	6	4	1
+1	7	-1	2
+2	7	8	2
+2	11	9	3
+2	16	16	4
+2	15	3	5
+2	10	2	6
+2	6	1	7
+2	5	-2	8
+
+# Suppression only applies from the second leg on, so leg 1 is untouched.
+query I
+SELECT count(*) FROM (
+  SELECT node, edge FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,7,5], u_turn_on_edge => false) WHERE path_id = 1
+  EXCEPT
+  SELECT node, edge FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,7,5]) WHERE path_id = 1
+);
+----
+0
+
+# Vertex 14 sits in a disconnected component, so legs 1 and 2 cannot be routed.
+# Non-strict skips them but keeps the path_id numbering aligned with the via
+# sequence, so the surviving leg is still path_id 3.
+query III
+SELECT path_id, node, edge
+FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,14,1,8]);
+----
+3	1	6
+3	3	7
+3	7	10
+3	8	-2
+
+# strict abandons the whole route as soon as one leg fails.
+query I
+SELECT count(*) FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,14,1,8], strict => true);
+----
+0
+
+# strict makes no difference when every leg is routable.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,7,1,8,15], strict => true)
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,7,1,8,15])
+);
+----
+0
+
+# pgRouting's positional spelling (edges, via, directed, strict, U_turn_on_edge)
+# must agree with the named form.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,7,5], true, false, false)
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,7,5], u_turn_on_edge => false)
+);
+----
+0
+
+# ---------------------------------------------------------------------------
 # duckrouting_dijkstra_near
 # ---------------------------------------------------------------------------
 

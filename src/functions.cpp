@@ -72,6 +72,8 @@ struct RoutingBindData : public duckdb::TableFunctionData {
 	bool directed = true;
 	bool equicost = false;
 	bool heap_paths = false;
+	bool strict = false;
+	bool u_turn_on_edge = true;
 	double distance = 0;
 	int64_t cap = 1;
 	int64_t k = 1;
@@ -259,6 +261,9 @@ duckdb::unique_ptr<FunctionData> ViaBind(ClientContext &, TableFunctionBindInput
 	bind_data->via = ToVertexIds(input.inputs[1], "via_vids");
 	bind_data->directed =
 	    NamedFlag(input, "directed", input.inputs.size() > 2 ? input.inputs[2].GetValue<bool>() : true);
+	bind_data->strict = NamedFlag(input, "strict", input.inputs.size() > 3 ? input.inputs[3].GetValue<bool>() : false);
+	bind_data->u_turn_on_edge =
+	    NamedFlag(input, "u_turn_on_edge", input.inputs.size() > 4 ? input.inputs[4].GetValue<bool>() : true);
 
 	names = {"seq",  "path_id", "path_seq", "start_vid", "end_vid",
 	         "node", "edge",    "cost",     "agg_cost",  "route_agg_cost"};
@@ -272,7 +277,8 @@ duckdb::unique_ptr<GlobalTableFunctionState> ViaInit(ClientContext &context, Tab
 	auto &bind_data = input.bind_data->Cast<RoutingBindData>();
 	auto state = duckdb::make_uniq<RoutingGlobalState<ViaRow>>();
 	auto edges = LoadEdges(context, bind_data.edges_sql);
-	state->rows = DijkstraVia(edges, bind_data.via, bind_data.directed);
+	state->rows = DijkstraVia(edges, bind_data.via, bind_data.directed, bind_data.strict,
+	                          bind_data.u_turn_on_edge);
 	return std::move(state);
 }
 
@@ -484,13 +490,17 @@ TableFunctionSet GetDrivingDistanceFunction() {
 
 TableFunctionSet GetDijkstraViaFunction() {
 	TableFunctionSet set("duckrouting_dijkstra_via");
-	for (size_t with_flag = 0; with_flag < 2; with_flag++) {
+	// pgRouting spells these positionally as (edges, via, directed, strict,
+	// U_turn_on_edge); register each prefix, and accept the named forms too.
+	for (size_t trailing = 0; trailing < 4; trailing++) {
 		duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, LogicalType::LIST(LogicalType::BIGINT)};
-		if (with_flag) {
+		for (size_t i = 0; i < trailing; i++) {
 			arguments.push_back(LogicalType::BOOLEAN);
 		}
 		TableFunction function(arguments, ViaScan, ViaBind, ViaInit);
 		function.named_parameters["directed"] = LogicalType::BOOLEAN;
+		function.named_parameters["strict"] = LogicalType::BOOLEAN;
+		function.named_parameters["u_turn_on_edge"] = LogicalType::BOOLEAN;
 		set.AddFunction(function);
 	}
 	return set;

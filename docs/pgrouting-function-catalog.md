@@ -35,7 +35,7 @@ wrappers is unencumbered.
 | `pgr_dijkstra` | `dijkstra_shortest_paths` / `_no_init` | `duckrouting_dijkstra` |
 | `pgr_dijkstraCost` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_cost` |
 | `pgr_dijkstraCostMatrix` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_cost_matrix` |
-| `pgr_dijkstraVia` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_via` |
+| `pgr_dijkstraVia` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_via`, incl. `strict` and `u_turn_on_edge` |
 | `pgr_dijkstraNear` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_near` |
 | `pgr_dijkstraNearCost` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_near_cost` |
 | `pgr_drivingDistance` | `dijkstra_shortest_paths` + visitor | `duckrouting_driving_distance` |
