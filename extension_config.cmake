@@ -3,7 +3,6 @@
 # Extension from this repo
 duckdb_extension_load(duckrouting
     SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
-    EXTENSION_VERSION v0.0.1
 )
 
 # Any extra extensions that should be built

@@ -40,7 +40,9 @@ wrappers is unencumbered.
 | `pgr_dijkstraNearCost` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_near_cost` |
 | `pgr_drivingDistance` | `dijkstra_shortest_paths` + visitor | `duckrouting_driving_distance` |
 | `pgr_withPointsDD` | `dijkstra_shortest_paths` + visitor | not yet |
-| `pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix` | `astar_search` | |
+| `pgr_aStar` | `astar_search` | `duckrouting_astar` |
+| `pgr_aStarCost` | `astar_search` | `duckrouting_astar_cost` |
+| `pgr_aStarCostMatrix` | `astar_search` | `duckrouting_astar_cost_matrix` |
 | `pgr_floydWarshall` | `floyd_warshall_all_pairs_shortest_paths` | `duckrouting_floyd_warshall` |
 | `pgr_johnson` | `johnson_all_pairs_shortest_paths` | `duckrouting_johnson` |
 | `pgr_bellmanFord` | `bellman_ford_shortest_paths` | `duckrouting_bellman_ford` |
@@ -136,6 +138,14 @@ pgRouting's q93 and q133 ask for `12 -> 7` undirected. Two paths cost exactly
 equal-cost path wins, so this is not a defect in either implementation. The
 tests assert hop count, endpoints and total cost for those cases, plus a check
 that every reported edge really connects its two reported nodes.
+
+**A\*** introduces a third edges contract: it needs `x1, y1, x2, y2` so the
+heuristic can estimate the distance still to cover. All six of pgRouting's
+heuristics are implemented with their exact formulas, and `epsilon` multiplies
+`factor` rather than acting separately -- which is what pgRouting does
+(`include/astar/astar.hpp`, `distance_heuristic(..., factor * epsilon)`).
+`6 -> 12` is another equal-cost tie: pgRouting routes via vertex 8, Boost via
+vertex 11, both costing 3.
 
 The flow family needed three corrections, all of which produced plausible but
 wrong output first:

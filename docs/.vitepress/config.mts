@@ -32,6 +32,7 @@ export default defineConfig({
         text: 'Functions',
         items: [
           { text: 'Dijkstra family', link: '/functions/dijkstra' },
+          { text: 'A*', link: '/functions/astar' },
           { text: 'K shortest paths', link: '/functions/ksp' },
           { text: 'All pairs', link: '/functions/all-pairs' },
           { text: 'Components', link: '/functions/components' },
