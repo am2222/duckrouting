@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckrouting/graph.hpp"
 #include "duckrouting/yen.hpp"
@@ -18,8 +19,7 @@ namespace duckrouting {
 
 std::vector<VertexEdgesRow> ExtractVertices(const std::vector<EdgeRow> &edges) {
 	std::vector<EdgeRow> ordered(edges);
-	std::stable_sort(ordered.begin(), ordered.end(),
-	                 [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
+	std::stable_sort(ordered.begin(), ordered.end(), [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
 
 	std::map<int64_t, VertexEdgesRow> vertices;
 	for (size_t i = 0; i < ordered.size(); i++) {
@@ -63,8 +63,8 @@ std::vector<int64_t> Normalized(const std::vector<int64_t> &values) {
 
 //! Turns parent maps into pgRouting's per-node rows.
 std::vector<PathRow> Reconstruct(const std::vector<uint64_t> &parent, const std::vector<int64_t> &parent_edge,
-                                 const std::vector<double> &parent_cost, const VertexIndex &index,
-                                 uint64_t source, uint64_t sink, int64_t start_vid, int64_t end_vid) {
+                                 const std::vector<double> &parent_cost, const VertexIndex &index, uint64_t source,
+                                 uint64_t sink, int64_t start_vid, int64_t end_vid) {
 	if (sink != source && parent[sink] == sink) {
 		return {};
 	}
@@ -104,8 +104,7 @@ template <typename Relax>
 std::vector<PathRow> SingleSourceDriver(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
                                         const std::vector<int64_t> &ends, bool directed, Relax relax) {
 	std::vector<EdgeRow> ordered(edges);
-	std::stable_sort(ordered.begin(), ordered.end(),
-	                 [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
+	std::stable_sort(ordered.begin(), ordered.end(), [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
 
 	VertexIndex index;
 	const Adjacency adjacency = BuildAdjacency(ordered, index, directed);
@@ -145,80 +144,78 @@ std::vector<PathRow> SingleSourceDriver(const std::vector<EdgeRow> &edges, const
 
 std::vector<PathRow> EdwardMoore(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
                                  const std::vector<int64_t> &ends, bool directed) {
-	return SingleSourceDriver(
-	    edges, Normalized(starts), Normalized(ends), directed,
-	    [](const Adjacency &adjacency, uint64_t source, std::vector<double> &distance,
-	       std::vector<uint64_t> &parent, std::vector<int64_t> &parent_edge, std::vector<double> &parent_cost) {
-		    // SPFA: Bellman-Ford that only revisits vertices whose distance
-		    // actually improved, held in a queue.
-		    std::vector<bool> queued(distance.size(), false);
-		    std::deque<uint64_t> pending;
-		    distance[source] = 0;
-		    pending.push_back(source);
-		    queued[source] = true;
+	return SingleSourceDriver(edges, Normalized(starts), Normalized(ends), directed,
+	                          [](const Adjacency &adjacency, uint64_t source, std::vector<double> &distance,
+	                             std::vector<uint64_t> &parent, std::vector<int64_t> &parent_edge,
+	                             std::vector<double> &parent_cost) {
+		                          // SPFA: Bellman-Ford that only revisits vertices whose distance
+		                          // actually improved, held in a queue.
+		                          std::vector<bool> queued(distance.size(), false);
+		                          std::deque<uint64_t> pending;
+		                          distance[source] = 0;
+		                          pending.push_back(source);
+		                          queued[source] = true;
 
-		    while (!pending.empty()) {
-			    const uint64_t at = pending.front();
-			    pending.pop_front();
-			    queued[at] = false;
+		                          while (!pending.empty()) {
+			                          const uint64_t at = pending.front();
+			                          pending.pop_front();
+			                          queued[at] = false;
 
-			    for (size_t i = 0; i < adjacency[at].size(); i++) {
-				    const Arc &arc = adjacency[at][i];
-				    const double candidate = distance[at] + arc.cost;
-				    if (candidate >= distance[arc.to]) {
-					    continue;
-				    }
-				    distance[arc.to] = candidate;
-				    parent[arc.to] = at;
-				    parent_edge[arc.to] = arc.edge;
-				    parent_cost[arc.to] = arc.cost;
-				    if (!queued[arc.to]) {
-					    pending.push_back(arc.to);
-					    queued[arc.to] = true;
-				    }
-			    }
-		    }
-	    });
+			                          for (size_t i = 0; i < adjacency[at].size(); i++) {
+				                          const Arc &arc = adjacency[at][i];
+				                          const double candidate = distance[at] + arc.cost;
+				                          if (candidate >= distance[arc.to]) {
+					                          continue;
+				                          }
+				                          distance[arc.to] = candidate;
+				                          parent[arc.to] = at;
+				                          parent_edge[arc.to] = arc.edge;
+				                          parent_cost[arc.to] = arc.cost;
+				                          if (!queued[arc.to]) {
+					                          pending.push_back(arc.to);
+					                          queued[arc.to] = true;
+				                          }
+			                          }
+		                          }
+	                          });
 }
 
-std::vector<PathRow> BinaryBreadthFirstSearch(const std::vector<EdgeRow> &edges,
-                                              const std::vector<int64_t> &starts, const std::vector<int64_t> &ends,
-                                              bool directed) {
-	return SingleSourceDriver(
-	    edges, Normalized(starts), Normalized(ends), directed,
-	    [](const Adjacency &adjacency, uint64_t source, std::vector<double> &distance,
-	       std::vector<uint64_t> &parent, std::vector<int64_t> &parent_edge, std::vector<double> &parent_cost) {
-		    // 0-1 BFS: a zero-cost edge goes to the front of the deque and a
-		    // unit-cost edge to the back, which keeps it in distance order
-		    // without a priority queue.
-		    std::deque<uint64_t> pending;
-		    distance[source] = 0;
-		    pending.push_back(source);
+std::vector<PathRow> BinaryBreadthFirstSearch(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                              const std::vector<int64_t> &ends, bool directed) {
+	return SingleSourceDriver(edges, Normalized(starts), Normalized(ends), directed,
+	                          [](const Adjacency &adjacency, uint64_t source, std::vector<double> &distance,
+	                             std::vector<uint64_t> &parent, std::vector<int64_t> &parent_edge,
+	                             std::vector<double> &parent_cost) {
+		                          // 0-1 BFS: a zero-cost edge goes to the front of the deque and a
+		                          // unit-cost edge to the back, which keeps it in distance order
+		                          // without a priority queue.
+		                          std::deque<uint64_t> pending;
+		                          distance[source] = 0;
+		                          pending.push_back(source);
 
-		    while (!pending.empty()) {
-			    const uint64_t at = pending.front();
-			    pending.pop_front();
+		                          while (!pending.empty()) {
+			                          const uint64_t at = pending.front();
+			                          pending.pop_front();
 
-			    for (size_t i = 0; i < adjacency[at].size(); i++) {
-				    const Arc &arc = adjacency[at][i];
-				    const double candidate = distance[at] + arc.cost;
-				    if (candidate >= distance[arc.to]) {
-					    continue;
-				    }
-				    distance[arc.to] = candidate;
-				    parent[arc.to] = at;
-				    parent_edge[arc.to] = arc.edge;
-				    parent_cost[arc.to] = arc.cost;
-				    if (arc.cost == 0) {
-					    pending.push_front(arc.to);
-				    } else {
-					    pending.push_back(arc.to);
-				    }
-			    }
-		    }
-	    });
+			                          for (size_t i = 0; i < adjacency[at].size(); i++) {
+				                          const Arc &arc = adjacency[at][i];
+				                          const double candidate = distance[at] + arc.cost;
+				                          if (candidate >= distance[arc.to]) {
+					                          continue;
+				                          }
+				                          distance[arc.to] = candidate;
+				                          parent[arc.to] = at;
+				                          parent_edge[arc.to] = arc.edge;
+				                          parent_cost[arc.to] = arc.cost;
+				                          if (arc.cost == 0) {
+					                          pending.push_front(arc.to);
+				                          } else {
+					                          pending.push_back(arc.to);
+				                          }
+			                          }
+		                          }
+	                          });
 }
-
 
 // ---------------------------------------------------------------------------
 // DuckDB table function bindings
@@ -290,17 +287,17 @@ void ReadPathArguments(TableFunctionBindInput &input, UtilityBindData &bind_data
 		if (parameter.second.IsNull()) {
 			throw BinderException("duckrouting: '%s' must not be NULL", parameter.first.c_str());
 		}
-		if (duckdb::StringUtil::CIEquals(parameter.first, "directed")) {
+		if (NameMatches(parameter.first, "directed")) {
 			bind_data.directed = parameter.second.GetValue<bool>();
-		} else if (duckdb::StringUtil::CIEquals(parameter.first, "heuristic")) {
+		} else if (NameMatches(parameter.first, "heuristic")) {
 			const int64_t value = parameter.second.GetValue<int64_t>();
 			if (value < 0 || value > 5) {
 				throw BinderException("duckrouting: 'heuristic' must be between 0 and 5");
 			}
 			bind_data.options.heuristic = static_cast<Heuristic>(value);
-		} else if (duckdb::StringUtil::CIEquals(parameter.first, "factor")) {
+		} else if (NameMatches(parameter.first, "factor")) {
 			bind_data.options.factor = parameter.second.GetValue<double>();
-		} else if (duckdb::StringUtil::CIEquals(parameter.first, "epsilon")) {
+		} else if (NameMatches(parameter.first, "epsilon")) {
 			bind_data.options.epsilon = parameter.second.GetValue<double>();
 			if (bind_data.options.epsilon < 1) {
 				throw BinderException("duckrouting: 'epsilon' must be at least 1");
@@ -310,7 +307,7 @@ void ReadPathArguments(TableFunctionBindInput &input, UtilityBindData &bind_data
 	bind_data.options.directed = bind_data.directed;
 }
 
-void PathColumns(duckdb::vector<LogicalType> &return_types, duckdb::vector<std::string> &names) {
+void PathColumns(duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	names = {"seq", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
 	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
 	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
@@ -334,7 +331,7 @@ void PathScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 	state.offset += count;
 }
 
-void CostColumns(duckdb::vector<LogicalType> &return_types, duckdb::vector<std::string> &names) {
+void CostColumns(duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	names = {"start_vid", "end_vid", "agg_cost"};
 	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE};
 }
@@ -358,8 +355,7 @@ enum class PathAlgorithm { BdDijkstra, BdAStar, EdwardMooreAlgorithm, BinaryBfs 
 
 template <PathAlgorithm Algorithm, bool CostsOnly>
 duckdb::unique_ptr<FunctionData> PathBind(ClientContext &, TableFunctionBindInput &input,
-                                          duckdb::vector<LogicalType> &return_types,
-                                          duckdb::vector<std::string> &names) {
+                                          duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<UtilityBindData>();
 	ReadPathArguments(input, *bind_data);
 	if (CostsOnly) {
@@ -373,8 +369,7 @@ duckdb::unique_ptr<FunctionData> PathBind(ClientContext &, TableFunctionBindInpu
 //! The matrix forms route one vertex list against itself.
 template <PathAlgorithm Algorithm>
 duckdb::unique_ptr<FunctionData> MatrixBind(ClientContext &, TableFunctionBindInput &input,
-                                            duckdb::vector<LogicalType> &return_types,
-                                            duckdb::vector<std::string> &names) {
+                                            duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -386,7 +381,7 @@ duckdb::unique_ptr<FunctionData> MatrixBind(ClientContext &, TableFunctionBindIn
 		bind_data->directed = input.inputs[2].GetValue<bool>();
 	}
 	for (auto &parameter : input.named_parameters) {
-		if (!parameter.second.IsNull() && duckdb::StringUtil::CIEquals(parameter.first, "directed")) {
+		if (!parameter.second.IsNull() && NameMatches(parameter.first, "directed")) {
 			bind_data->directed = parameter.second.GetValue<bool>();
 		}
 	}
@@ -409,8 +404,7 @@ duckdb::unique_ptr<GlobalTableFunctionState> PathInit(ClientContext &context, Ta
 		} else if (Algorithm == PathAlgorithm::EdwardMooreAlgorithm) {
 			state->rows = EdwardMoore(edges, bind_data.starts, bind_data.ends, bind_data.directed);
 		} else {
-			state->rows =
-			    BinaryBreadthFirstSearch(edges, bind_data.starts, bind_data.ends, bind_data.directed);
+			state->rows = BinaryBreadthFirstSearch(edges, bind_data.starts, bind_data.ends, bind_data.directed);
 		}
 	}
 	return std::move(state);
@@ -433,8 +427,7 @@ duckdb::unique_ptr<GlobalTableFunctionState> CostInit(ClientContext &context, Ta
 // --- extract_vertices, degree, full_version ---------------------------------
 
 duckdb::unique_ptr<FunctionData> VerticesBind(ClientContext &, TableFunctionBindInput &input,
-                                              duckdb::vector<LogicalType> &return_types,
-                                              duckdb::vector<std::string> &names) {
+                                              duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -475,8 +468,7 @@ void VerticesScan(ClientContext &, TableFunctionInput &data, DataChunk &output) 
 }
 
 duckdb::unique_ptr<FunctionData> DegreeBind(ClientContext &, TableFunctionBindInput &input,
-                                            duckdb::vector<LogicalType> &return_types,
-                                            duckdb::vector<std::string> &names) {
+                                            duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -516,8 +508,7 @@ struct VersionState : public GlobalTableFunctionState {
 };
 
 duckdb::unique_ptr<FunctionData> FullVersionBind(ClientContext &, TableFunctionBindInput &,
-                                                 duckdb::vector<LogicalType> &return_types,
-                                                 duckdb::vector<std::string> &names) {
+                                                 duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	names = {"version", "boost", "compiler", "build_type"};
 	return_types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
 	return nullptr;
@@ -561,14 +552,12 @@ TableFunctionSet PathSet(const char *name, bool with_astar_options) {
 	for (size_t start_is_list = 0; start_is_list < 2; start_is_list++) {
 		for (size_t end_is_list = 0; end_is_list < 2; end_is_list++) {
 			for (size_t with_flag = 0; with_flag < 2; with_flag++) {
-				duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR,
-				                                       start_is_list ? list : LogicalType::BIGINT,
+				duckdb::vector<LogicalType> arguments {LogicalType::VARCHAR, start_is_list ? list : LogicalType::BIGINT,
 				                                       end_is_list ? list : LogicalType::BIGINT};
 				if (with_flag) {
 					arguments.push_back(LogicalType::BOOLEAN);
 				}
-				TableFunction function(arguments, CostsOnly ? CostRowScan : PathScan,
-				                       PathBind<Algorithm, CostsOnly>,
+				TableFunction function(arguments, CostsOnly ? CostRowScan : PathScan, PathBind<Algorithm, CostsOnly>,
 				                       CostsOnly ? CostInit<Algorithm> : PathInit<Algorithm>);
 				function.named_parameters["directed"] = LogicalType::BOOLEAN;
 				if (with_astar_options) {

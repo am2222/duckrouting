@@ -1,6 +1,7 @@
 # name: test/sql/spanning.test
 # description: kruskal / prim spanning forests and their traversals vs pgRouting
-# group: [duckrouting]
+# group: [sql]
+
 #
 # Expected results from pgRouting docqueries/spanningTree/.
 #

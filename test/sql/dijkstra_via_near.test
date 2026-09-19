@@ -1,6 +1,7 @@
 # name: test/sql/dijkstra_via_near.test
 # description: dijkstra_via / dijkstra_near / dijkstra_near_cost vs pgRouting output
-# group: [duckrouting]
+# group: [sql]
+
 #
 # Expected results copied from pgRouting docqueries/dijkstra/dijkstraVia.result,
 # dijkstraNear.result and dijkstraNearCost.result. Query labels (q01, q1, ...)

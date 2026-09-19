@@ -61,9 +61,9 @@ struct SpanningEdgeRow {
 
 //! How the spanning tree is walked once it has been built.
 enum class Traversal {
-	Bfs,       //!< breadth first; depth is non-decreasing
-	DfsDepth,  //!< depth first, cut off by hop count
-	DfsCost    //!< depth first, cut off by accumulated cost (the DD variants)
+	Bfs,      //!< breadth first; depth is non-decreasing
+	DfsDepth, //!< depth first, cut off by hop count
+	DfsCost   //!< depth first, cut off by accumulated cost (the DD variants)
 };
 
 //! Walks `adjacency` from each root, emitting pgRouting's drivingDistance
@@ -103,8 +103,7 @@ std::vector<SpanningEdgeRow> Prim(const std::vector<EdgeRow> &edges);
 //! Walks the spanning forest from each root. `limit` is a maximum depth for
 //! Bfs/DfsDepth and a maximum accumulated cost for DfsCost.
 std::vector<DrivingDistanceRow> SpanningTraversal(const std::vector<EdgeRow> &edges, bool use_prim,
-                                                  const std::vector<int64_t> &roots, Traversal traversal,
-                                                  double limit);
+                                                  const std::vector<int64_t> &roots, Traversal traversal, double limit);
 
 //! An identifier paired with a colour class.
 struct ColorRow {
@@ -205,9 +204,9 @@ std::vector<IdentifierRow> MaxCardinalityMatch(const std::vector<FlowEdgeRow> &e
 //! How A* estimates the remaining distance to a goal. These are pgRouting's
 //! numbering; 0 makes A* behave exactly like Dijkstra.
 enum class Heuristic {
-	None = 0,      //!< 0
-	MaxDelta = 1,  //!< |max(dx, dy)|
-	MinDelta = 2,  //!< |min(dx, dy)|
+	None = 0,     //!< 0
+	MaxDelta = 1, //!< |max(dx, dy)|
+	MinDelta = 2, //!< |min(dx, dy)|
 	SquaredEuclidean = 3,
 	Euclidean = 4,
 	Manhattan = 5 //!< |dx| + |dy|, the default
@@ -300,17 +299,15 @@ std::vector<DegreeRow> Degree(const std::vector<EdgeRow> &edges);
 //! as Dijkstra, reached by exploring less of the graph. Not a Boost algorithm.
 std::vector<PathRow> BidirectionalDijkstra(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
                                            const std::vector<int64_t> &ends, bool directed);
-std::vector<CostRow> BidirectionalDijkstraCost(const std::vector<EdgeRow> &edges,
-                                               const std::vector<int64_t> &starts,
+std::vector<CostRow> BidirectionalDijkstraCost(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
                                                const std::vector<int64_t> &ends, bool directed);
 
 //! The same, with each frontier guided by a heuristic.
-std::vector<PathRow> BidirectionalAStar(const std::vector<CoordinateEdgeRow> &edges,
-                                        const std::vector<int64_t> &starts, const std::vector<int64_t> &ends,
-                                        const AStarOptions &options);
+std::vector<PathRow> BidirectionalAStar(const std::vector<CoordinateEdgeRow> &edges, const std::vector<int64_t> &starts,
+                                        const std::vector<int64_t> &ends, const AStarOptions &options);
 std::vector<CostRow> BidirectionalAStarCost(const std::vector<CoordinateEdgeRow> &edges,
-                                            const std::vector<int64_t> &starts,
-                                            const std::vector<int64_t> &ends, const AStarOptions &options);
+                                            const std::vector<int64_t> &starts, const std::vector<int64_t> &ends,
+                                            const AStarOptions &options);
 
 //! Edward Moore's shortest path, better known as SPFA: a queue-based
 //! Bellman-Ford refinement. Not a Boost algorithm.
@@ -318,8 +315,7 @@ std::vector<PathRow> EdwardMoore(const std::vector<EdgeRow> &edges, const std::v
                                  const std::vector<int64_t> &ends, bool directed);
 
 //! 0-1 BFS: a deque-based shortest path for graphs whose edges cost 0 or 1.
-std::vector<PathRow> BinaryBreadthFirstSearch(const std::vector<EdgeRow> &edges,
-                                              const std::vector<int64_t> &starts,
+std::vector<PathRow> BinaryBreadthFirstSearch(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
                                               const std::vector<int64_t> &ends, bool directed);
 
 duckdb::TableFunctionSet GetExtractVerticesFunction();
@@ -333,6 +329,81 @@ duckdb::TableFunctionSet GetBdAStarCostMatrixFunction();
 duckdb::TableFunctionSet GetEdwardMooreFunction();
 duckdb::TableFunctionSet GetBinaryBreadthFirstSearchFunction();
 duckdb::TableFunctionSet GetFullVersionFunction();
+
+//! Replaces each edge carrying points with the chain of segments between
+//! them. A point becomes a vertex numbered -pid; which direction it connects
+//! to depends on the driving side. Shared by the whole withPoints family.
+std::vector<EdgeRow> SplitEdgesAtPoints(const std::vector<EdgeRow> &edges, const std::vector<PointOnEdge> &points,
+                                        char driving_side);
+
+//! Drops point vertices that the caller did not ask about, which is what
+//! `details => false` means.
+std::vector<PathRow> HidePoints(const std::vector<PathRow> &rows, const std::vector<int64_t> &visible);
+
+//! Which contraction operators to apply, in order.
+enum class ContractionMethod { DeadEnd = 1, Linear = 2 };
+
+//! Simplifies the graph by absorbing dead ends and collapsing chains.
+//! `cycles` is how many times to run the chosen methods round, since each pass
+//! can expose new opportunities for the other.
+std::vector<ContractionRow> Contract(const std::vector<EdgeRow> &edges, bool directed,
+                                     const std::vector<ContractionMethod> &methods, int64_t cycles,
+                                     const std::vector<int64_t> &forbidden);
+
+//! Registers the three geometry helpers, which are SQL macros over DuckDB's
+//! spatial extension rather than C++ functions.
+//! One edge of a transformed graph.
+struct TransformedEdgeRow {
+	int64_t source;
+	int64_t target;
+	double cost;
+	double reverse_cost;
+	int64_t edge;
+};
+
+//! The line graph: each edge of the input becomes a vertex, and two such
+//! vertices are joined when the edges they stand for share an endpoint.
+std::vector<TransformedEdgeRow> LineGraph(const std::vector<EdgeRow> &edges, bool directed);
+
+//! The full line graph, which additionally splits each vertex into one node
+//! per incident half-edge so that turn costs can be attached.
+std::vector<TransformedEdgeRow> LineGraphFull(const std::vector<EdgeRow> &edges);
+
+//! A closed walk traversing every edge at least once, and its total cost.
+std::vector<PathRow> ChinesePostman(const std::vector<EdgeRow> &edges, bool directed);
+double ChinesePostmanCost(const std::vector<EdgeRow> &edges, bool directed);
+
+//! Shortest path that respects turn restrictions. Following a restricted
+//! sequence of edges is not forbidden outright -- it costs extra, which is how
+//! pgRouting models it, so a large restriction cost is an effective ban.
+std::vector<PathRow> Trsp(const std::vector<EdgeRow> &edges, const std::vector<Restriction> &restrictions,
+                          const std::vector<int64_t> &starts, const std::vector<int64_t> &ends, bool directed);
+
+//! The same, routed through a sequence of via vertices.
+std::vector<ViaRow> TrspVia(const std::vector<EdgeRow> &edges, const std::vector<Restriction> &restrictions,
+                            const std::vector<int64_t> &via, bool directed, bool strict, bool u_turn_on_edge);
+
+duckdb::TableFunctionSet GetTrspFunction();
+duckdb::TableFunctionSet GetTrspViaFunction();
+duckdb::TableFunctionSet GetTrspWithPointsFunction();
+duckdb::TableFunctionSet GetTrspViaWithPointsFunction();
+
+duckdb::TableFunctionSet GetLineGraphFunction();
+duckdb::TableFunctionSet GetLineGraphFullFunction();
+duckdb::TableFunctionSet GetChinesePostmanFunction();
+duckdb::TableFunctionSet GetChinesePostmanCostFunction();
+
+void RegisterGeometryMacros(duckdb::ExtensionLoader &loader);
+
+duckdb::TableFunctionSet GetContractionFunction();
+duckdb::TableFunctionSet GetDeadEndContractionFunction();
+duckdb::TableFunctionSet GetLinearContractionFunction();
+
+duckdb::TableFunctionSet GetWithPointsFunction();
+duckdb::TableFunctionSet GetWithPointsCostFunction();
+duckdb::TableFunctionSet GetWithPointsCostMatrixFunction();
+duckdb::TableFunctionSet GetWithPointsViaFunction();
+duckdb::TableFunctionSet GetWithPointsKspFunction();
 
 duckdb::TableFunctionSet GetContractionHierarchiesFunction();
 duckdb::TableFunctionSet GetWithPointsDDFunction();

@@ -1,4 +1,5 @@
 #include "duckrouting/edges.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/connection.hpp"
@@ -21,12 +22,19 @@ using duckdb::string;
 namespace {
 
 //! Case-insensitive membership test over the column names of `edges_sql`.
-bool HasColumn(const duckdb::vector<string> &names, const char *wanted) {
-	return std::any_of(names.begin(), names.end(),
-	                   [&](const string &name) { return duckdb::StringUtil::CIEquals(name, wanted); });
+//! Templated on the container for the same reason.
+template <typename Names>
+bool HasColumn(const Names &names, const char *wanted) {
+	for (auto it = names.begin(); it != names.end(); ++it) {
+		if (NameMatches(*it, wanted)) {
+			return true;
+		}
+	}
+	return false;
 }
 
-void RequireColumn(const duckdb::vector<string> &names, const char *wanted) {
+template <typename Names>
+void RequireColumn(const Names &names, const char *wanted) {
 	if (!HasColumn(names, wanted)) {
 		throw BinderException("duckrouting: the edges query must expose a '%s' column", wanted);
 	}
@@ -34,8 +42,7 @@ void RequireColumn(const duckdb::vector<string> &names, const char *wanted) {
 
 } // namespace
 
-std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql, bool require_id,
-                               bool require_cost) {
+std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql, bool require_id, bool require_cost) {
 	Connection connection(DatabaseInstance::GetDatabase(context));
 
 	// Prepare (but do not run) the user's query so we can inspect its columns
@@ -46,7 +53,7 @@ std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql, 
 		throw BinderException("duckrouting: could not prepare the edges query: %s", prepared->GetError());
 	}
 
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	const bool has_id = HasColumn(names, "id");
 	if (require_id && !has_id) {
 		RequireColumn(names, "id");
@@ -67,7 +74,8 @@ std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql, 
 	projection += has_id ? "CAST(id AS BIGINT) AS id, " : "CAST(row_number() OVER () AS BIGINT) AS id, ";
 	projection += "CAST(source AS BIGINT) AS source, CAST(target AS BIGINT) AS target, ";
 	projection += has_cost ? "CAST(cost AS DOUBLE) AS cost, " : "CAST(1 AS DOUBLE) AS cost, ";
-	projection += has_reverse_cost ? "CAST(reverse_cost AS DOUBLE) AS reverse_cost " : "CAST(-1 AS DOUBLE) AS reverse_cost ";
+	projection +=
+	    has_reverse_cost ? "CAST(reverse_cost AS DOUBLE) AS reverse_cost " : "CAST(-1 AS DOUBLE) AS reverse_cost ";
 	projection += "FROM (" + edges_sql + ") AS __duckrouting_edges";
 
 	auto result = connection.Query(projection);
@@ -97,8 +105,7 @@ std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql, 
 		for (duckdb::idx_t row = 0; row < chunk->size(); row++) {
 			if (!id_valid.RowIsValid(row) || !source_valid.RowIsValid(row) || !target_valid.RowIsValid(row) ||
 			    !cost_valid.RowIsValid(row)) {
-				throw InvalidInputException(
-				    "duckrouting: the edges query returned NULL in id, source, target or cost");
+				throw InvalidInputException("duckrouting: the edges query returned NULL in id, source, target or cost");
 			}
 			// A NULL reverse_cost means "no reverse edge", same as a negative one.
 			const double reverse_cost = reverse_valid.RowIsValid(row) ? reverse_costs[row] : -1.0;
@@ -122,7 +129,7 @@ std::vector<FlowEdgeRow> LoadFlowEdges(ClientContext &context, const string &edg
 		throw BinderException("duckrouting: could not prepare the edges query: %s", prepared->GetError());
 	}
 
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	RequireColumn(names, "id");
 	RequireColumn(names, "source");
 	RequireColumn(names, "target");
@@ -140,9 +147,9 @@ std::vector<FlowEdgeRow> LoadFlowEdges(ClientContext &context, const string &edg
 	};
 	string projection = "SELECT CAST(id AS BIGINT) AS id, CAST(source AS BIGINT) AS source, "
 	                    "CAST(target AS BIGINT) AS target, " +
-	                    column("capacity") + " AS capacity, " + column("reverse_capacity") +
-	                    " AS reverse_capacity, " + column("cost") + " AS cost, " + column("reverse_cost") +
-	                    " AS reverse_cost FROM (" + edges_sql + ") AS __duckrouting_edges";
+	                    column("capacity") + " AS capacity, " + column("reverse_capacity") + " AS reverse_capacity, " +
+	                    column("cost") + " AS cost, " + column("reverse_cost") + " AS reverse_cost FROM (" + edges_sql +
+	                    ") AS __duckrouting_edges";
 
 	auto result = connection.Query(projection);
 	if (result->HasError()) {
@@ -175,8 +182,7 @@ std::vector<FlowEdgeRow> LoadFlowEdges(ClientContext &context, const string &edg
 				return FlatVector::Validity(chunk->data[col]).RowIsValid(row) ? data[row] : -1.0;
 			};
 			edges.push_back(FlowEdgeRow {ids[row], sources[row], targets[row], value(3, capacities),
-			                             value(4, reverse_capacities), value(5, costs),
-			                             value(6, reverse_costs)});
+			                             value(4, reverse_capacities), value(5, costs), value(6, reverse_costs)});
 		}
 	}
 	return edges;
@@ -191,7 +197,7 @@ std::vector<CoordinateEdgeRow> LoadCoordinateEdges(ClientContext &context, const
 		throw BinderException("duckrouting: could not prepare the edges query: %s", prepared->GetError());
 	}
 
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	RequireColumn(names, "id");
 	RequireColumn(names, "source");
 	RequireColumn(names, "target");
@@ -205,8 +211,8 @@ std::vector<CoordinateEdgeRow> LoadCoordinateEdges(ClientContext &context, const
 
 	string projection = "SELECT CAST(id AS BIGINT) AS id, CAST(source AS BIGINT) AS source, "
 	                    "CAST(target AS BIGINT) AS target, CAST(cost AS DOUBLE) AS cost, ";
-	projection += has_reverse_cost ? "CAST(reverse_cost AS DOUBLE) AS reverse_cost, "
-	                               : "CAST(-1 AS DOUBLE) AS reverse_cost, ";
+	projection +=
+	    has_reverse_cost ? "CAST(reverse_cost AS DOUBLE) AS reverse_cost, " : "CAST(-1 AS DOUBLE) AS reverse_cost, ";
 	projection += "CAST(x1 AS DOUBLE) AS x1, CAST(y1 AS DOUBLE) AS y1, CAST(x2 AS DOUBLE) AS x2, "
 	              "CAST(y2 AS DOUBLE) AS y2 FROM (" +
 	              edges_sql + ") AS __duckrouting_edges";
@@ -268,7 +274,7 @@ std::vector<MatrixCell> LoadCostMatrix(ClientContext &context, const string &mat
 	if (prepared->HasError()) {
 		throw BinderException("duckrouting: could not prepare the matrix query: %s", prepared->GetError());
 	}
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	RequireColumn(names, "start_vid");
 	RequireColumn(names, "end_vid");
 	RequireColumn(names, "agg_cost");
@@ -311,7 +317,7 @@ std::vector<PlacedPoint> LoadPoints(ClientContext &context, const string &points
 	if (prepared->HasError()) {
 		throw BinderException("duckrouting: could not prepare the coordinates query: %s", prepared->GetError());
 	}
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	RequireColumn(names, "id");
 	RequireColumn(names, "x");
 	RequireColumn(names, "y");
@@ -352,7 +358,7 @@ std::vector<PointOnEdge> LoadPointsOnEdges(ClientContext &context, const string 
 	if (prepared->HasError()) {
 		throw BinderException("duckrouting: could not prepare the points query: %s", prepared->GetError());
 	}
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	RequireColumn(names, "pid");
 	RequireColumn(names, "edge_id");
 	RequireColumn(names, "fraction");
@@ -405,6 +411,46 @@ std::vector<PointOnEdge> LoadPointsOnEdges(ClientContext &context, const string 
 		}
 	}
 	return points;
+}
+
+std::vector<Restriction> LoadRestrictions(ClientContext &context, const string &restrictions_sql) {
+	Connection connection(DatabaseInstance::GetDatabase(context));
+
+	auto prepared = connection.Prepare("SELECT * FROM (" + restrictions_sql + ") AS __duckrouting_restrictions");
+	if (prepared->HasError()) {
+		throw BinderException("duckrouting: could not prepare the restrictions query: %s", prepared->GetError());
+	}
+	const auto &names = prepared->GetNames();
+	RequireColumn(names, "path");
+	RequireColumn(names, "cost");
+
+	auto result = connection.Query("SELECT CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost "
+	                               "FROM (" +
+	                               restrictions_sql + ") AS __duckrouting_restrictions");
+	if (result->HasError()) {
+		throw InvalidInputException("duckrouting: the restrictions query failed: %s", result->GetError());
+	}
+
+	std::vector<Restriction> restrictions;
+	for (duckdb::idx_t row = 0; row < result->RowCount(); row++) {
+		auto path_value = result->GetValue(0, row);
+		auto cost_value = result->GetValue(1, row);
+		if (path_value.IsNull() || cost_value.IsNull()) {
+			continue;
+		}
+		Restriction restriction {};
+		for (auto &child : duckdb::ListValue::GetChildren(path_value)) {
+			if (!child.IsNull()) {
+				restriction.path.push_back(child.GetValue<int64_t>());
+			}
+		}
+		if (restriction.path.empty()) {
+			continue;
+		}
+		restriction.cost = cost_value.GetValue<double>();
+		restrictions.push_back(restriction);
+	}
+	return restrictions;
 }
 
 } // namespace duckrouting

@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckrouting/graph.hpp"
 #include "duckrouting/yen.hpp"
@@ -84,10 +85,9 @@ std::set<int64_t> SpanningEdgeIds(const UndirectedGraph &graph, const VertexInde
 		}
 
 		std::vector<UndirectedGraph::vertex_descriptor> predecessor(boost::num_vertices(graph));
-		boost::prim_minimum_spanning_tree(
-		    graph, &predecessor[0],
-		    boost::root_vertex(static_cast<UndirectedGraph::vertex_descriptor>(root))
-		        .weight_map(boost::get(&RoutingEdge::cost, graph)));
+		boost::prim_minimum_spanning_tree(graph, &predecessor[0],
+		                                  boost::root_vertex(static_cast<UndirectedGraph::vertex_descriptor>(root))
+		                                      .weight_map(boost::get(&RoutingEdge::cost, graph)));
 
 		for (uint64_t v = 0; v < index.Size(); v++) {
 			if (component[v] != c || static_cast<uint64_t>(predecessor[v]) == v) {
@@ -116,12 +116,10 @@ std::set<int64_t> SpanningEdgeIds(const UndirectedGraph &graph, const VertexInde
 }
 
 //! Adjacency of the spanning forest only, in edge-id order.
-Adjacency TreeAdjacency(const std::vector<EdgeRow> &edges, const VertexIndex &index,
-                                                const std::set<int64_t> &chosen) {
+Adjacency TreeAdjacency(const std::vector<EdgeRow> &edges, const VertexIndex &index, const std::set<int64_t> &chosen) {
 	Adjacency adjacency(index.Size());
 	std::vector<EdgeRow> ordered(edges);
-	std::stable_sort(ordered.begin(), ordered.end(),
-	                 [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
+	std::stable_sort(ordered.begin(), ordered.end(), [](const EdgeRow &a, const EdgeRow &b) { return a.id < b.id; });
 
 	for (size_t i = 0; i < ordered.size(); i++) {
 		const EdgeRow &edge = ordered[i];
@@ -231,8 +229,7 @@ std::vector<int64_t> RootIds(const Value &value) {
 
 //! (edge, cost) -- kruskal and prim.
 duckdb::unique_ptr<FunctionData> ForestBind(ClientContext &, TableFunctionBindInput &input,
-                                            duckdb::vector<LogicalType> &return_types,
-                                            duckdb::vector<std::string> &names) {
+                                            duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -267,8 +264,7 @@ void ForestScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 //! The traversal variants all share pgRouting's drivingDistance column shape.
 template <bool UsePrim, Traversal Mode>
 duckdb::unique_ptr<FunctionData> TraversalBind(ClientContext &, TableFunctionBindInput &input,
-                                               duckdb::vector<LogicalType> &return_types,
-                                               duckdb::vector<std::string> &names) {
+                                               duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -289,7 +285,7 @@ duckdb::unique_ptr<FunctionData> TraversalBind(ClientContext &, TableFunctionBin
 		                       ? static_cast<double>(input.inputs[2].GetValue<int64_t>())
 		                       : static_cast<double>(std::numeric_limits<int64_t>::max());
 		for (auto &parameter : input.named_parameters) {
-			if (duckdb::StringUtil::CIEquals(parameter.first, "max_depth")) {
+			if (NameMatches(parameter.first, "max_depth")) {
 				if (parameter.second.IsNull()) {
 					throw BinderException("duckrouting: 'max_depth' must not be NULL");
 				}
@@ -311,8 +307,7 @@ duckdb::unique_ptr<GlobalTableFunctionState> TraversalInit(ClientContext &contex
 	auto &bind_data = input.bind_data->Cast<SpanningBindData>();
 	auto state = duckdb::make_uniq<SpanningGlobalState<DrivingDistanceRow>>();
 	auto edges = LoadEdges(context, bind_data.edges_sql);
-	state->rows = SpanningTraversal(edges, bind_data.use_prim, bind_data.roots, bind_data.traversal,
-	                                bind_data.limit);
+	state->rows = SpanningTraversal(edges, bind_data.use_prim, bind_data.roots, bind_data.traversal, bind_data.limit);
 	return std::move(state);
 }
 

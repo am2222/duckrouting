@@ -1,0 +1,148 @@
+# name: test/sql/contraction_ops.test
+# description: dead-end and linear contraction vs pgRouting
+# group: [sql]
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# ---------------------------------------------------------------------------
+# duckrouting_dead_end_contraction -- pgRouting q1
+# ---------------------------------------------------------------------------
+# A vertex reaching only one other is a dead end and is absorbed into it.
+# Vertex 1 goes into 3, then 3 itself becomes a dead end and goes into 7
+# carrying 1 along, which is why vertex 7 ends up holding both.
+
+query TITIIR
+SELECT * FROM duckrouting_dead_end_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false);
+----
+v	4	[2]	-1	-1	-1
+v	6	[5]	-1	-1	-1
+v	7	[1, 3]	-1	-1	-1
+v	8	[9]	-1	-1	-1
+v	14	[13]	-1	-1	-1
+
+# No vertex may be absorbed twice, and none may absorb itself.
+query I
+SELECT count(*) FROM (
+  SELECT unnest(contracted_vertices) AS v
+  FROM duckrouting_dead_end_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+) GROUP BY v HAVING count(*) > 1;
+----
+
+query I
+SELECT count(*) FROM duckrouting_dead_end_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+WHERE list_contains(contracted_vertices, id);
+----
+0
+
+# forbidden protects a vertex from being absorbed.
+query I
+SELECT count(*) FROM (
+  SELECT unnest(contracted_vertices) AS v
+  FROM duckrouting_dead_end_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false,
+                                        forbidden => [2, 5])
+) WHERE v IN (2, 5);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_linear_contraction -- pgRouting q1
+# ---------------------------------------------------------------------------
+# KNOWN DIFFERENCE: the three shortcuts are the same as pgRouting's, but the
+# order they are created in -- and therefore their negative ids -- differs.
+# We contract in ascending vertex id; pgRouting does not document its order.
+
+query TIIR
+SELECT contracted_vertices, source, target, cost
+FROM duckrouting_linear_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+ORDER BY source, target;
+----
+[3]	1	7	2
+[15]	10	16	2
+[17]	12	16	2
+
+# A shortcut replaces exactly one vertex here, and costs what the two edges
+# it replaced cost together.
+query I
+SELECT count(*) FROM duckrouting_linear_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+WHERE len(contracted_vertices) <> 1 OR cost <> 2;
+----
+0
+
+# Shortcut ids are negative and distinct.
+query I
+SELECT count(*) FROM (
+  SELECT id FROM duckrouting_linear_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+  GROUP BY id HAVING count(*) > 1 OR min(id) >= 0
+);
+----
+0
+
+# A shortcut never joins a vertex to itself.
+query I
+SELECT count(*) FROM duckrouting_linear_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+WHERE source = target;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_contraction -- both operators together
+# ---------------------------------------------------------------------------
+
+# Running only method 1 is the same as dead-end contraction on its own.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false, methods => [1])
+  EXCEPT
+  SELECT * FROM duckrouting_dead_end_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+);
+----
+0
+
+# Likewise method 2 alone.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false, methods => [2])
+  EXCEPT
+  SELECT * FROM duckrouting_linear_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+);
+----
+0
+
+# Both together simplify more than either alone: absorbing dead ends leaves
+# new chains behind for the linear pass to collapse.
+query I
+SELECT count(*) >=
+  (SELECT count(*) FROM duckrouting_linear_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false))
+FROM duckrouting_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+WHERE type = 'e';
+----
+true
+
+# Every vertex mentioned anywhere in the result was a vertex of the graph.
+query I
+SELECT count(*) FROM (
+  SELECT unnest(contracted_vertices) AS v
+  FROM duckrouting_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+) c
+WHERE NOT EXISTS (SELECT 1 FROM edges e WHERE e.source = c.v OR e.target = c.v);
+----
+0
+
+statement error
+SELECT * FROM duckrouting_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false, methods => [3]);
+----
+'methods' may only contain 1 or 2
+
+statement error
+SELECT * FROM duckrouting_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false, cycles => 0);
+----
+'cycles' must be at least 1

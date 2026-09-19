@@ -1,0 +1,170 @@
+# name: test/sql/transform.test
+# description: line graph and Chinese postman
+# group: [sql]
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# ---------------------------------------------------------------------------
+# duckrouting_line_graph -- pgRouting q1
+# ---------------------------------------------------------------------------
+# Each edge becomes a vertex; two are joined when the edges share an endpoint.
+# Undirected ignores the cost columns: edges 2 and 5 both touch vertex 10 and
+# are adjacent there even though neither can be *entered* at it.
+
+query IIIRR
+SELECT * FROM duckrouting_line_graph(
+  'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (2,4,5,8)', false);
+----
+1	2	4	1	-1
+2	2	5	1	-1
+3	4	8	1	-1
+4	5	8	1	-1
+
+# Every vertex of the line graph is an edge of the original.
+query I
+SELECT count(*) FROM (
+  SELECT source AS v FROM duckrouting_line_graph('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+  UNION
+  SELECT target FROM duckrouting_line_graph('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+) l WHERE NOT EXISTS (SELECT 1 FROM edges e WHERE e.id = l.v);
+----
+0
+
+# Two edges are adjacent in the line graph only if they really share a vertex.
+query I
+SELECT count(*) FROM duckrouting_line_graph('SELECT id, source, target, cost, reverse_cost FROM edges', false) l
+JOIN edges a ON a.id = l.source
+JOIN edges b ON b.id = l.target
+WHERE a.source NOT IN (b.source, b.target) AND a.target NOT IN (b.source, b.target);
+----
+0
+
+# A pair is reported once undirected, and direction matters when directed.
+query I
+SELECT count(*) FROM (
+  SELECT source, target FROM duckrouting_line_graph('SELECT id, source, target, cost, reverse_cost FROM edges', false)
+  WHERE source > target
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_line_graph_full
+# ---------------------------------------------------------------------------
+# KNOWN DIFFERENCE: this splits each vertex into one node per incident
+# half-edge so turn costs can be attached. pgRouting numbers those nodes
+# negatively but does not document the numbering, so ours will differ. The
+# structure is what matters.
+
+# Half-edge nodes are negative; original vertices stay positive.
+query I
+SELECT count(*) > 0 FROM duckrouting_line_graph_full(
+  'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (4,7,8,10)')
+WHERE source < 0 OR target < 0;
+----
+true
+
+# Every traversal edge carries a real edge id; the linking edges are free.
+query I
+SELECT count(*) FROM duckrouting_line_graph_full(
+  'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (4,7,8,10)')
+WHERE (edge <> 0 AND cost = 0) OR (edge = 0 AND cost <> 0);
+----
+0
+
+# A reverse traversal is reported with the edge id negated.
+query I
+SELECT count(*) FROM duckrouting_line_graph_full(
+  'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (4,7,8,10)')
+WHERE edge <> 0 AND abs(edge) NOT IN (4, 7, 8, 10);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_chinese_postman
+# ---------------------------------------------------------------------------
+# A closed walk covering every edge at least once.
+
+# The walk begins and ends at the same vertex.
+query I
+SELECT count(*) FROM (
+  SELECT first(node ORDER BY seq) AS head, last(node ORDER BY seq) AS tail
+  FROM duckrouting_chinese_postman('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17')
+) WHERE head <> tail;
+----
+0
+
+# The defining property: no edge is left untraversed.
+query I
+SELECT count(*) FROM edges e
+WHERE e.id < 17
+  AND NOT EXISTS (
+    SELECT 1 FROM duckrouting_chinese_postman(
+      'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17') c
+    WHERE c.edge = e.id);
+----
+0
+
+# Every step follows a real edge between its two nodes.
+query I
+SELECT count(*) FROM (
+  SELECT c.node, c.edge, lead(c.node) OVER (ORDER BY c.seq) AS next_node
+  FROM duckrouting_chinese_postman('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17') c
+) p JOIN edges e ON e.id = p.edge
+WHERE p.next_node IS NOT NULL
+  AND NOT ((e.source = p.node AND e.target = p.next_node) OR (e.target = p.node AND e.source = p.next_node));
+----
+0
+
+# agg_cost is the running total, and the walk costs at least as much as
+# traversing every edge once.
+query I
+SELECT count(*) FROM (
+  SELECT agg_cost, sum(cost) OVER (ORDER BY seq) - cost AS running
+  FROM duckrouting_chinese_postman('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17')
+) WHERE abs(agg_cost - running) > 1e-9;
+----
+0
+
+query I
+SELECT max(agg_cost) >= 16 FROM duckrouting_chinese_postman(
+  'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17');
+----
+true
+
+# A graph that is already even needs no edge walked twice: a triangle costs 3.
+query R
+SELECT max(agg_cost) FROM duckrouting_chinese_postman(
+  'SELECT * FROM (VALUES (1,1,2,1.0,1.0),(2,2,3,1.0,1.0),(3,3,1,1.0,1.0)) t(id,source,target,cost,reverse_cost)');
+----
+3
+
+# ---------------------------------------------------------------------------
+# duckrouting_chinese_postman_cost
+# ---------------------------------------------------------------------------
+
+query R
+SELECT * FROM duckrouting_chinese_postman_cost(
+  'SELECT * FROM (VALUES (1,1,2,1.0,1.0),(2,2,3,1.0,1.0),(3,3,1,1.0,1.0)) t(id,source,target,cost,reverse_cost)');
+----
+3
+
+# The scalar form is the final agg_cost of the walk.
+query I
+SELECT count(*) FROM (
+  SELECT (SELECT cost FROM duckrouting_chinese_postman_cost(
+            'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17')) AS a,
+         (SELECT max(agg_cost) FROM duckrouting_chinese_postman(
+            'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17')) AS b
+) WHERE abs(a - b) > 1e-9;
+----
+0

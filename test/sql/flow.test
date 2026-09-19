@@ -1,6 +1,7 @@
 # name: test/sql/flow.test
 # description: maximum flow family vs pgRouting output
-# group: [duckrouting]
+# group: [sql]
+
 #
 # Expected results from pgRouting docqueries/max_flow/.
 #
@@ -187,17 +188,21 @@ SELECT count(*) FROM (
 # duckrouting_max_cardinality_match -- pgRouting q2
 # ---------------------------------------------------------------------------
 
+# KNOWN TIE: a maximum matching is not unique. pgRouting reports
+# {1,5,6,13,14,16,17,18} and so does Boost on arm64 and macOS, but on x86-64
+# Boost returns a different matching of the same size. What is determined is
+# the *cardinality* and the matching property, so assert those.
 query I
-SELECT * FROM duckrouting_max_cardinality_match('SELECT id, source, target, cost, reverse_cost FROM edges');
+SELECT count(*) FROM duckrouting_max_cardinality_match('SELECT id, source, target, cost, reverse_cost FROM edges');
 ----
-1
-5
-6
-13
-14
-16
-17
-18
+8
+
+# Every chosen edge exists in the input.
+query I
+SELECT count(*) FROM duckrouting_max_cardinality_match('SELECT id, source, target, cost, reverse_cost FROM edges') m
+WHERE NOT EXISTS (SELECT 1 FROM edges e WHERE e.id = m.edge);
+----
+0
 
 # A matching means no vertex is covered twice.
 query I

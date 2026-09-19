@@ -21,10 +21,38 @@ below is the one that matters for porting:
 
 ## Licensing
 
-pgRouting is **GPL-2.0-or-later**. Group 2 source cannot be lifted into a
-permissively-licensed extension -- those need clean-room reimplementation.
-Group 1 is mostly glue over Boost, which is BSL-1.0, so writing our own
-wrappers is unencumbered.
+pgRouting is **GPL-2.0-or-later**; duckrouting is MIT. That asymmetry decides
+what can be ported and how.
+
+Group 1 is mostly glue over Boost, which is BSL-1.0, so writing fresh wrappers
+is unencumbered. Group 2 is pgRouting's own code, so each function there was
+reimplemented from the published algorithm rather than ported -- Yen's for
+`ksp`, Hierholzer's for `chinese_postman`, a bidirectional meet-in-the-middle
+for `bd_dijkstra`, and so on.
+
+### The three that were left out
+
+`pgr_pickDeliver`, `pgr_pickDeliverEuclidean` and `pgr_vrpOneDepot` are vehicle
+routing with capacities, time windows and pickup-delivery pairing -- about 5,400
+lines across 27 files in pgRouting, and not one published algorithm but a stack
+of construction and local-search heuristics.
+
+They were deliberately not implemented:
+
+- **Vendoring pgRouting's source** would work, but GPL-2 section 2b requires the
+  distributed work to be licensed *as a whole* under GPL. One binary cannot be
+  MIT for 90 functions and GPL for three. It would relicense the entire
+  extension and stop anyone embedding it in a commercial product.
+- **A separate GPL extension** (`duckrouting_vrp`) would be the correct
+  structure if this were wanted -- two binaries, no linking between them, MIT
+  code is free to move into the GPL one. The cost is a second extension to
+  build, test, publish and keep in step with DuckDB.
+- **Clean-room implementation** would keep MIT but loses the thing that makes
+  the rest of this project checkable: route *quality* cannot be verified against
+  pgRouting the way a shortest path can. A mediocre VRP heuristic is
+  indistinguishable from a good one without a benchmark.
+
+Three functions out of 93 did not justify any of those costs.
 
 ---
 
@@ -93,27 +121,25 @@ wrappers is unencumbered.
 | `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix` | `cpp_common/bidirectional.hpp` -- own `std::priority_queue` bidirectional search | `duckrouting_bd_dijkstra`, `duckrouting_bd_dijkstra_cost`, `duckrouting_bd_dijkstra_cost_matrix` |
 | `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix` | same hand-written bidirectional base, plus a heuristic | `duckrouting_bd_astar`, `duckrouting_bd_astar_cost`, `duckrouting_bd_astar_cost_matrix` |
 | `pgr_KSP` | `include/yen/ksp.hpp` -- own Yen's algorithm. Reimplemented independently as `duckrouting_ksp`; Boost has no k-shortest-paths routine | `duckrouting_ksp` |
-| `pgr_withPointsKSP`, `pgr_turnRestrictedPath` | Yen over the withPoints / turn-restriction graphs |  |
-| `pgr_trsp`, `pgr_trspVia`, `pgr_trsp_withPoints`, `pgr_trspVia_withPoints` | `trsp/trspHandler.cpp` -- own turn-restriction search. Zero `boost::` symbols |  |
-| `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`, `pgr_withPointsVia` | own edge-splitting graph rewrite, then delegates |  |
+| `pgr_withPointsKSP`, `pgr_turnRestrictedPath` | Yen over the withPoints / turn-restriction graphs | `duckrouting_with_points_ksp` |
+| `pgr_trsp`, `pgr_trspVia`, `pgr_trsp_withPoints`, `pgr_trspVia_withPoints` | `trsp/trspHandler.cpp` -- own turn-restriction search. Zero `boost::` symbols | `duckrouting_trsp`, `duckrouting_trsp_via`, `duckrouting_trsp_with_points`, `duckrouting_trsp_via_with_points` |
+| `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`, `pgr_withPointsVia` | own edge-splitting graph rewrite, then delegates | `duckrouting_with_points`, `duckrouting_with_points_cost`, `duckrouting_with_points_cost_matrix`, `duckrouting_with_points_via` |
 | `pgr_edwardMoore` | own SPFA; Boost only for edge iteration | `duckrouting_edward_moore` |
 | `pgr_binaryBreadthFirstSearch` | own 0-1 BFS; Boost only for edge iteration | `duckrouting_binary_breadth_first_search` |
-| `pgr_chinesePostman`, `pgr_chinesePostmanCost` | own. Zero `boost::` symbols |  |
-| `pgr_lineGraph`, `pgr_lineGraphFull` | own line-graph construction |  |
+| `pgr_chinesePostman`, `pgr_chinesePostmanCost` | own. Zero `boost::` symbols | `duckrouting_chinese_postman`, `duckrouting_chinese_postman_cost` |
+| `pgr_lineGraph`, `pgr_lineGraphFull` | own line-graph construction | `duckrouting_line_graph`, `duckrouting_line_graph_full` |
 | `pgr_pickDeliver`, `pgr_pickDeliverEuclidean` | own VRPPDTW heuristic, 17 source files. Zero `boost::` symbols |  |
 | `pgr_vrpOneDepot` | own legacy VRP code |  |
-| `pgr_contraction`, `pgr_deadEndContraction`, `pgr_linearContraction` | own contraction operators applied to a `boost::adjacency_list` |  |
-## Group 3 -- no C++; pure SQL / PL-pgSQL
+| `pgr_contraction`, `pgr_deadEndContraction`, `pgr_linearContraction` | own contraction operators applied to a `boost::adjacency_list` | `duckrouting_contraction`, `duckrouting_dead_end_contraction`, `duckrouting_linear_contraction` |## Group 3 -- no C++; pure SQL / PL-pgSQL
 
 | Function | Notes | duckrouting |
 | --- | --- | --- |
 | `pgr_extractVertices` | derives a vertex table from edges | `duckrouting_extract_vertices` |
-| `pgr_findCloseEdges` | needs PostGIS geometry predicates |  |
-| `pgr_separateCrossing` | needs PostGIS |  |
-| `pgr_separateTouching` | needs PostGIS |  |
+| `pgr_findCloseEdges` | needs PostGIS geometry predicates | `duckrouting_find_close_edges` |
+| `pgr_separateCrossing` | needs PostGIS | `duckrouting_separate_crossing` |
+| `pgr_separateTouching` | needs PostGIS | `duckrouting_separate_touching` |
 | `pgr_degree` | vertex degree over the edge table | `duckrouting_degree` |
-| `pgr_version`, `pgr_full_version` | metadata | `duckrouting_version`, `duckrouting_full_version` |
-## Tally
+| `pgr_version`, `pgr_full_version` | metadata | `duckrouting_version`, `duckrouting_full_version` |## Tally
 
 | Group | Count |
 | --- | --- |

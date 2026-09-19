@@ -1,6 +1,6 @@
 # name: test/sql/duckrouting.test
 # description: test duckrouting extension loading and registration
-# group: [duckrouting]
+# group: [sql]
 
 # Before we load the extension, this will fail
 statement error
@@ -43,10 +43,14 @@ duckrouting_boyer_myrvold	1
 duckrouting_boykov_kolmogorov	4
 duckrouting_breadth_first_search	4
 duckrouting_bridges	1
+duckrouting_chinese_postman	2
+duckrouting_chinese_postman_cost	2
 duckrouting_connected_components	1
+duckrouting_contraction	2
 duckrouting_contraction_hierarchies	2
 duckrouting_cuthill_mckee_ordering	1
 duckrouting_dag_shortest_path	4
+duckrouting_dead_end_contraction	2
 duckrouting_degree	1
 duckrouting_depth_first_search	4
 duckrouting_dijkstra	8
@@ -73,6 +77,9 @@ duckrouting_kruskal_bfs	4
 duckrouting_kruskal_dd	2
 duckrouting_kruskal_dfs	4
 duckrouting_ksp	8
+duckrouting_line_graph	2
+duckrouting_line_graph_full	1
+duckrouting_linear_contraction	2
 duckrouting_make_connected	1
 duckrouting_max_cardinality_match	1
 duckrouting_max_flow	4
@@ -89,6 +96,15 @@ duckrouting_stoer_wagner	1
 duckrouting_strong_components	1
 duckrouting_topological_sort	1
 duckrouting_transitive_closure	1
+duckrouting_trsp	8
+duckrouting_trsp_via	2
+duckrouting_trsp_via_with_points	2
+duckrouting_trsp_with_points	8
 duckrouting_tsp	3
 duckrouting_tsp_euclidean	3
+duckrouting_with_points	8
+duckrouting_with_points_cost	8
+duckrouting_with_points_cost_matrix	2
 duckrouting_with_points_dd	4
+duckrouting_with_points_ksp	8
+duckrouting_with_points_via	2

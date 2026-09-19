@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckrouting/graph.hpp"
 
@@ -51,8 +52,7 @@ namespace {
 typedef boost::adjacency_list<
     boost::vecS, boost::vecS, boost::undirectedS,
     boost::property<boost::vertex_color_t, boost::default_color_type,
-                    boost::property<boost::vertex_degree_t, int,
-                                    boost::property<boost::vertex_priority_t, double>>>>
+                    boost::property<boost::vertex_degree_t, int, boost::property<boost::vertex_priority_t, double>>>>
     OrderingGraph;
 
 OrderingGraph BuildOrderingGraph(const std::vector<EdgeRow> &edges, VertexIndex &index) {
@@ -86,10 +86,9 @@ std::vector<IdentifierRow> VertexOrdering(const std::vector<EdgeRow> &edges, Ord
 		std::vector<boost::default_color_type> color(boost::num_vertices(graph));
 		std::vector<DirectedGraph::vertex_descriptor> order;
 		try {
-			boost::topological_sort(
-			    graph, std::back_inserter(order),
-			    boost::color_map(boost::make_iterator_property_map(color.begin(),
-			                                                       boost::get(boost::vertex_index, graph))));
+			boost::topological_sort(graph, std::back_inserter(order),
+			                        boost::color_map(boost::make_iterator_property_map(
+			                            color.begin(), boost::get(boost::vertex_index, graph))));
 		} catch (const boost::not_a_dag &) {
 			throw duckdb::InvalidInputException(
 			    "duckrouting_topological_sort: the graph contains a cycle, so it is not a DAG");
@@ -172,8 +171,7 @@ void ReadEdgesArgument(TableFunctionBindInput &input, OrderingBindData &bind_dat
 
 //! (seq, node) -- the four ordering functions.
 duckdb::unique_ptr<FunctionData> OrderingBind(ClientContext &, TableFunctionBindInput &input,
-                                              duckdb::vector<LogicalType> &return_types,
-                                              duckdb::vector<std::string> &names) {
+                                              duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<OrderingBindData>();
 	ReadEdgesArgument(input, *bind_data);
 	names = {"seq", "node"};
@@ -203,8 +201,7 @@ void OrderingScan(ClientContext &, TableFunctionInput &data, DataChunk &output) 
 
 //! (node, targets) -- transitiveClosure.
 duckdb::unique_ptr<FunctionData> ClosureBind(ClientContext &, TableFunctionBindInput &input,
-                                             duckdb::vector<LogicalType> &return_types,
-                                             duckdb::vector<std::string> &names) {
+                                             duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<OrderingBindData>();
 	ReadEdgesArgument(input, *bind_data);
 	names = {"node", "targets"};

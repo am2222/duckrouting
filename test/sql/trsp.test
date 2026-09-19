@@ -1,0 +1,207 @@
+# name: test/sql/trsp.test
+# description: turn-restricted shortest path vs pgRouting
+# group: [sql]
+
+#
+# A restriction is (path, cost): following that exact sequence of edges costs
+# extra. It is a penalty rather than a ban, which is how pgRouting models it --
+# a large cost simply makes the turn unattractive enough to avoid.
+#
+# That means the search state is (vertex, recent edge history), not just the
+# vertex: whether a turn is restricted depends on how you arrived.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+statement ok
+CREATE TABLE restrictions(id BIGINT, path BIGINT[], cost DOUBLE);
+
+statement ok
+INSERT INTO restrictions VALUES (1,[4,7],100),(2,[8,11],100),(3,[7,10],100),(4,[3,5,9],4);
+
+# ---------------------------------------------------------------------------
+# duckrouting_trsp -- pgRouting q2
+# ---------------------------------------------------------------------------
+
+query IIIIIIRR
+SELECT * FROM duckrouting_trsp('SELECT id, source, target, cost, reverse_cost FROM edges',
+                               'SELECT path, cost FROM restrictions', 6, 10, false);
+----
+1	1	6	10	6	2	1	0
+2	2	6	10	10	-1	0	1
+
+# With no restriction that matches, the answer is plain Dijkstra.
+query I
+SELECT count(*) FROM (
+  SELECT path_seq, start_vid, end_vid, node, edge, cost, agg_cost
+  FROM duckrouting_trsp('SELECT id, source, target, cost, reverse_cost FROM edges',
+                        'SELECT * FROM (VALUES ([999]::BIGINT[], 1.0)) t(path, cost)', 6, 10, false)
+  EXCEPT
+  SELECT path_seq, start_vid, end_vid, node, edge, cost, agg_cost
+  FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10, false)
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# A restriction that actually bites
+# ---------------------------------------------------------------------------
+# Unrestricted, 6 -> 8 runs 6 -(4)-> 7 -(10)-> 8 for a cost of 2.
+
+query IIR
+SELECT node, edge, agg_cost FROM duckrouting_trsp(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT * FROM (VALUES ([999]::BIGINT[], 1.0)) t(path, cost)', 6, 8, false);
+----
+6	4	0
+7	10	1
+8	-1	2
+
+# Restricting exactly that turn, at a cost high enough to matter, forces a
+# detour. Several detours cost 4 -- out to vertex 3 and back, or round through
+# 10 and 11 -- and which one is chosen is a tie, so assert the cost and the
+# thing that actually matters: the restricted turn is not taken.
+query R
+SELECT max(agg_cost) FROM duckrouting_trsp(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT * FROM (VALUES ([4,10]::BIGINT[], 100.0)) t(path, cost)', 6, 8, false);
+----
+4
+
+# Edge 4 is never immediately followed by edge 10, which is the restriction.
+query I
+SELECT count(*) FROM (
+  SELECT edge, lag(edge) OVER (ORDER BY seq) AS previous
+  FROM duckrouting_trsp('SELECT id, source, target, cost, reverse_cost FROM edges',
+                        'SELECT * FROM (VALUES ([4,10]::BIGINT[], 100.0)) t(path, cost)', 6, 8, false)
+) WHERE previous = 4 AND edge = 10;
+----
+0
+
+# Without the restriction that turn is exactly what gets used.
+query I
+SELECT count(*) FROM (
+  SELECT edge, lag(edge) OVER (ORDER BY seq) AS previous
+  FROM duckrouting_trsp('SELECT id, source, target, cost, reverse_cost FROM edges',
+                        'SELECT * FROM (VALUES ([999]::BIGINT[], 1.0)) t(path, cost)', 6, 8, false)
+) WHERE previous = 4 AND edge = 10;
+----
+1
+
+# A small penalty is not a ban: the same route is kept and simply costs more.
+query R
+SELECT max(agg_cost) FROM duckrouting_trsp(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT * FROM (VALUES ([4,10]::BIGINT[], 0.5)) t(path, cost)', 6, 8, false);
+----
+2.5
+
+# A restriction longer than any path taken cannot apply.
+query R
+SELECT max(agg_cost) FROM duckrouting_trsp(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT * FROM (VALUES ([4,10,12,13]::BIGINT[], 100.0)) t(path, cost)', 6, 7, false);
+----
+1
+
+# Every reported edge really joins its node to the next.
+query I
+SELECT count(*) FROM (
+  SELECT t.node, t.edge, lead(t.node) OVER (ORDER BY t.seq) AS next_node
+  FROM duckrouting_trsp('SELECT id, source, target, cost, reverse_cost FROM edges',
+                        'SELECT path, cost FROM restrictions', 6, 17, false) t
+) p JOIN edges e ON e.id = p.edge
+WHERE p.next_node IS NOT NULL
+  AND NOT ((e.source = p.node AND e.target = p.next_node) OR (e.target = p.node AND e.source = p.next_node));
+----
+0
+
+# Several starts and ends at once.
+query II
+SELECT DISTINCT start_vid, end_vid FROM duckrouting_trsp(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT path, cost FROM restrictions', [6,12], [7,10], false)
+ORDER BY start_vid, end_vid;
+----
+6	7
+6	10
+12	7
+12	10
+
+# ---------------------------------------------------------------------------
+# duckrouting_trsp_via
+# ---------------------------------------------------------------------------
+
+# Two legs, closing with pgRouting's -2 terminator.
+query IIIR
+SELECT path_id, node, edge, route_agg_cost FROM duckrouting_trsp_via(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT path, cost FROM restrictions', [6, 7, 12], false);
+----
+1	6	4	0
+1	7	-1	1
+2	7	10	1
+2	8	12	2
+2	12	-2	3
+
+# route_agg_cost accumulates across legs, so the total is the sum of them.
+query I
+SELECT count(*) FROM (
+  SELECT max(route_agg_cost) AS total FROM duckrouting_trsp_via(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT path, cost FROM restrictions', [6, 7, 12], false)
+) WHERE total <> 3;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_trsp_with_points and duckrouting_trsp_via_with_points
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE poi(pid BIGINT, edge_id BIGINT, fraction DOUBLE, side VARCHAR);
+
+statement ok
+INSERT INTO poi VALUES (1, 4, 0.4, 'b');
+
+# Starting from a point 40% along edge 4, vertex 7 is 0.6 further on.
+query IIR
+SELECT node, edge, agg_cost FROM duckrouting_trsp_with_points(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT * FROM (VALUES ([999]::BIGINT[], 1.0)) t(path, cost)',
+  'SELECT pid, edge_id, fraction, side FROM poi', -1, 7, false, details => true);
+----
+-1	4	0
+7	-1	0.6
+
+# With no points the withPoints form is the plain one.
+query I
+SELECT count(*) FROM (
+  SELECT path_seq, node, edge, agg_cost FROM duckrouting_trsp_with_points(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT path, cost FROM restrictions',
+    'SELECT * FROM (VALUES (1, 999, 0.5, ''b'')) t(pid, edge_id, fraction, side)', 6, 10, false)
+  EXCEPT
+  SELECT path_seq, node, edge, agg_cost FROM duckrouting_trsp(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT path, cost FROM restrictions', 6, 10, false)
+);
+----
+0
+
+# The via form with points routes through the point.
+query I
+SELECT count(*) > 0 FROM duckrouting_trsp_via_with_points(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT path, cost FROM restrictions',
+  'SELECT pid, edge_id, fraction, side FROM poi', [6, -1, 8], false);
+----
+true

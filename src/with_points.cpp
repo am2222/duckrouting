@@ -9,8 +9,6 @@
 
 namespace duckrouting {
 
-namespace {
-
 //! Replaces every edge carrying points with the chain of segments between
 //! them. This follows pgRouting's rules in src/withPoints/withPoints.cpp: a
 //! point becomes a vertex numbered -pid, and which of the two directions it
@@ -23,13 +21,12 @@ std::vector<EdgeRow> SplitEdgesAtPoints(const std::vector<EdgeRow> &edges, const
 		by_edge[points[i].edge_id].push_back(points[i]);
 	}
 	for (auto entry = by_edge.begin(); entry != by_edge.end(); ++entry) {
-		std::sort(entry->second.begin(), entry->second.end(),
-		          [](const PointOnEdge &a, const PointOnEdge &b) {
-			          if (a.fraction != b.fraction) {
-				          return a.fraction < b.fraction;
-			          }
-			          return a.pid < b.pid;
-		          });
+		std::sort(entry->second.begin(), entry->second.end(), [](const PointOnEdge &a, const PointOnEdge &b) {
+			if (a.fraction != b.fraction) {
+				return a.fraction < b.fraction;
+			}
+			return a.pid < b.pid;
+		});
 	}
 
 	std::vector<EdgeRow> result;
@@ -78,8 +75,7 @@ std::vector<EdgeRow> SplitEdgesAtPoints(const std::vector<EdgeRow> &edges, const
 					forward_used += forward_delta * edge.cost;
 				}
 				if (IsTraversable(edge.reverse_cost)) {
-					result.push_back(
-					    EdgeRow {edge.id, reverse_from, vertex, -1, reverse_delta * edge.reverse_cost});
+					result.push_back(EdgeRow {edge.id, reverse_from, vertex, -1, reverse_delta * edge.reverse_cost});
 					reverse_used += reverse_delta * edge.reverse_cost;
 				}
 				forward_from = vertex;
@@ -97,8 +93,7 @@ std::vector<EdgeRow> SplitEdgesAtPoints(const std::vector<EdgeRow> &edges, const
 				forward_from = vertex;
 				forward_fraction = point.fraction;
 			} else {
-				result.push_back(
-				    EdgeRow {edge.id, reverse_from, vertex, -1, reverse_delta * edge.reverse_cost});
+				result.push_back(EdgeRow {edge.id, reverse_from, vertex, -1, reverse_delta * edge.reverse_cost});
 				reverse_used += reverse_delta * edge.reverse_cost;
 				reverse_from = vertex;
 				reverse_fraction = point.fraction;
@@ -110,14 +105,23 @@ std::vector<EdgeRow> SplitEdgesAtPoints(const std::vector<EdgeRow> &edges, const
 			result.push_back(EdgeRow {edge.id, forward_from, edge.target, edge.cost - forward_used, -1});
 		}
 		if (IsTraversable(edge.reverse_cost)) {
-			result.push_back(
-			    EdgeRow {edge.id, reverse_from, edge.target, -1, edge.reverse_cost - reverse_used});
+			result.push_back(EdgeRow {edge.id, reverse_from, edge.target, -1, edge.reverse_cost - reverse_used});
 		}
 	}
 	return result;
 }
 
-} // namespace
+std::vector<PathRow> HidePoints(const std::vector<PathRow> &rows, const std::vector<int64_t> &visible) {
+	std::set<int64_t> keep(visible.begin(), visible.end());
+	std::vector<PathRow> kept;
+	for (size_t i = 0; i < rows.size(); i++) {
+		if (rows[i].node < 0 && !keep.count(rows[i].node)) {
+			continue;
+		}
+		kept.push_back(rows[i]);
+	}
+	return kept;
+}
 
 std::vector<DrivingDistanceRow> WithPointsDrivingDistance(const std::vector<EdgeRow> &edges,
                                                           const std::vector<PointOnEdge> &points,

@@ -1,6 +1,7 @@
 # name: test/sql/components_allpairs.test
 # description: all-pairs and component functions vs pgRouting output
-# group: [duckrouting]
+# group: [sql]
+
 #
 # Expected results from pgRouting docqueries/allpairs/ and docqueries/components/.
 

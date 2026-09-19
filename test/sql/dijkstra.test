@@ -1,6 +1,7 @@
 # name: test/sql/dijkstra.test
 # description: duckrouting_dijkstra checked against pgRouting's own expected output
-# group: [duckrouting]
+# group: [sql]
+
 #
 # The edge table is pgRouting's canonical sample network (tools/testers/sampledata.pg),
 # with source/target resolved to the values pgRouting's docs publish, so no PostGIS is

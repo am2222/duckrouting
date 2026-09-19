@@ -21,8 +21,8 @@ inline void DuckroutingVersionScalarFun(DataChunk &args, ExpressionState &state,
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
-	auto duckrouting_version_scalar_function =
-	    ScalarFunction("duckrouting_version", {LogicalType::VARCHAR}, LogicalType::VARCHAR, DuckroutingVersionScalarFun);
+	auto duckrouting_version_scalar_function = ScalarFunction("duckrouting_version", {LogicalType::VARCHAR},
+	                                                          LogicalType::VARCHAR, DuckroutingVersionScalarFun);
 	loader.RegisterFunction(duckrouting_version_scalar_function);
 
 	loader.RegisterFunction(duckrouting::GetDijkstraFunction());
@@ -103,6 +103,28 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetExtractVerticesFunction());
 	loader.RegisterFunction(duckrouting::GetDegreeFunction());
 	loader.RegisterFunction(duckrouting::GetFullVersionFunction());
+
+	loader.RegisterFunction(duckrouting::GetWithPointsFunction());
+	loader.RegisterFunction(duckrouting::GetWithPointsCostFunction());
+	loader.RegisterFunction(duckrouting::GetWithPointsCostMatrixFunction());
+	loader.RegisterFunction(duckrouting::GetWithPointsViaFunction());
+	loader.RegisterFunction(duckrouting::GetWithPointsKspFunction());
+
+	loader.RegisterFunction(duckrouting::GetContractionFunction());
+	loader.RegisterFunction(duckrouting::GetDeadEndContractionFunction());
+	loader.RegisterFunction(duckrouting::GetLinearContractionFunction());
+
+	loader.RegisterFunction(duckrouting::GetTrspFunction());
+	loader.RegisterFunction(duckrouting::GetTrspViaFunction());
+	loader.RegisterFunction(duckrouting::GetTrspWithPointsFunction());
+	loader.RegisterFunction(duckrouting::GetTrspViaWithPointsFunction());
+
+	loader.RegisterFunction(duckrouting::GetLineGraphFunction());
+	loader.RegisterFunction(duckrouting::GetLineGraphFullFunction());
+	loader.RegisterFunction(duckrouting::GetChinesePostmanFunction());
+	loader.RegisterFunction(duckrouting::GetChinesePostmanCostFunction());
+
+	duckrouting::RegisterGeometryMacros(loader);
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

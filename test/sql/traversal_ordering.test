@@ -1,6 +1,7 @@
 # name: test/sql/traversal_ordering.test
 # description: BFS/DFS, bellmanFord, dagShortestPath, transitive closure and orderings
-# group: [duckrouting]
+# group: [sql]
+
 #
 # Expected results from pgRouting docqueries/traversal/, bellman_ford/,
 # dagShortestPath/, transitiveClosure/ and ordering/.

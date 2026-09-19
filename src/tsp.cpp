@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckrouting/graph.hpp"
 
@@ -115,8 +116,7 @@ std::vector<TourRow> Tsp(const std::vector<MatrixCell> &matrix, int64_t start_id
 
 	// Missing cells stay at infinity, which surfaces as an unusable tour rather
 	// than a silently wrong one.
-	std::vector<std::vector<double>> distance(n,
-	                                          std::vector<double>(n, std::numeric_limits<double>::infinity()));
+	std::vector<std::vector<double>> distance(n, std::vector<double>(n, std::numeric_limits<double>::infinity()));
 	for (size_t i = 0; i < n; i++) {
 		distance[i][i] = 0;
 	}
@@ -176,7 +176,6 @@ std::vector<TourRow> TspEuclidean(const std::vector<PlacedPoint> &points, int64_
 	return SolveTour(distance, index, has_start, start, has_end, end);
 }
 
-
 // ---------------------------------------------------------------------------
 // DuckDB table function bindings
 // ---------------------------------------------------------------------------
@@ -213,8 +212,7 @@ struct TspGlobalState : public GlobalTableFunctionState {
 };
 
 duckdb::unique_ptr<FunctionData> TspBind(ClientContext &, TableFunctionBindInput &input,
-                                         duckdb::vector<LogicalType> &return_types,
-                                         duckdb::vector<std::string> &names) {
+                                         duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the query must not be NULL");
 	}
@@ -230,9 +228,9 @@ duckdb::unique_ptr<FunctionData> TspBind(ClientContext &, TableFunctionBindInput
 		if (parameter.second.IsNull()) {
 			throw BinderException("duckrouting: '%s' must not be NULL", parameter.first.c_str());
 		}
-		if (duckdb::StringUtil::CIEquals(parameter.first, "start_id")) {
+		if (NameMatches(parameter.first, "start_id")) {
 			bind_data->start_id = parameter.second.GetValue<int64_t>();
-		} else if (duckdb::StringUtil::CIEquals(parameter.first, "end_id")) {
+		} else if (NameMatches(parameter.first, "end_id")) {
 			bind_data->end_id = parameter.second.GetValue<int64_t>();
 		}
 	}
@@ -246,10 +244,8 @@ template <bool Euclidean>
 duckdb::unique_ptr<GlobalTableFunctionState> TspInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<TspBindData>();
 	auto state = duckdb::make_uniq<TspGlobalState>();
-	state->rows = Euclidean ? TspEuclidean(LoadPoints(context, bind_data.query), bind_data.start_id,
-	                                       bind_data.end_id)
-	                        : Tsp(LoadCostMatrix(context, bind_data.query), bind_data.start_id,
-	                              bind_data.end_id);
+	state->rows = Euclidean ? TspEuclidean(LoadPoints(context, bind_data.query), bind_data.start_id, bind_data.end_id)
+	                        : Tsp(LoadCostMatrix(context, bind_data.query), bind_data.start_id, bind_data.end_id);
 	return std::move(state);
 }
 

@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckrouting/graph.hpp"
 
@@ -117,8 +118,7 @@ std::vector<CostRow> Johnson(const std::vector<EdgeRow> &edges, bool directed) {
 	}
 	auto graph = BuildGraph<UndirectedGraph>(edges, index);
 	auto matrix = EmptyMatrix(graph);
-	boost::johnson_all_pairs_shortest_paths(graph, matrix,
-	                                        boost::weight_map(boost::get(&RoutingEdge::cost, graph)));
+	boost::johnson_all_pairs_shortest_paths(graph, matrix, boost::weight_map(boost::get(&RoutingEdge::cost, graph)));
 	return MatrixToRows(matrix, index);
 }
 
@@ -139,8 +139,8 @@ std::vector<ComponentRow> StrongComponents(const std::vector<EdgeRow> &edges) {
 	VertexIndex index;
 	auto graph = BuildGraph<DirectedGraph>(edges, index);
 	std::vector<int> component(boost::num_vertices(graph));
-	boost::strong_components(graph, boost::make_iterator_property_map(component.begin(),
-	                                                                  boost::get(boost::vertex_index, graph)));
+	boost::strong_components(
+	    graph, boost::make_iterator_property_map(component.begin(), boost::get(boost::vertex_index, graph)));
 
 	std::vector<std::pair<int64_t, int64_t>> pairs;
 	for (uint64_t v = 0; v < index.Size(); v++) {
@@ -187,8 +187,7 @@ std::vector<IdentifierRow> ArticulationPoints(const std::vector<EdgeRow> &edges)
 	for (size_t i = 0; i < points.size(); i++) {
 		rows.push_back(IdentifierRow {index.IdOf(static_cast<uint64_t>(points[i]))});
 	}
-	std::sort(rows.begin(), rows.end(),
-	          [](const IdentifierRow &a, const IdentifierRow &b) { return a.id < b.id; });
+	std::sort(rows.begin(), rows.end(), [](const IdentifierRow &a, const IdentifierRow &b) { return a.id < b.id; });
 	return rows;
 }
 
@@ -206,8 +205,7 @@ std::vector<IdentifierRow> Bridges(const std::vector<EdgeRow> &edges) {
 			rows.push_back(IdentifierRow {components[i].member});
 		}
 	}
-	std::sort(rows.begin(), rows.end(),
-	          [](const IdentifierRow &a, const IdentifierRow &b) { return a.id < b.id; });
+	std::sort(rows.begin(), rows.end(), [](const IdentifierRow &a, const IdentifierRow &b) { return a.id < b.id; });
 	return rows;
 }
 
@@ -225,7 +223,6 @@ std::vector<PairRow> MakeConnected(const std::vector<EdgeRow> &edges) {
 	}
 	return rows;
 }
-
 
 // ---------------------------------------------------------------------------
 // DuckDB table function bindings
@@ -269,7 +266,7 @@ GraphBindData &ReadGraphArguments(TableFunctionBindInput &input, duckdb::unique_
 	bind_data->edges_sql = input.inputs[0].GetValue<std::string>();
 	bool directed = input.inputs.size() > 1 && !input.inputs[1].IsNull() ? input.inputs[1].GetValue<bool>() : true;
 	for (auto &parameter : input.named_parameters) {
-		if (duckdb::StringUtil::CIEquals(parameter.first, "directed")) {
+		if (NameMatches(parameter.first, "directed")) {
 			if (parameter.second.IsNull()) {
 				throw BinderException("duckrouting: 'directed' must not be NULL");
 			}
@@ -282,8 +279,7 @@ GraphBindData &ReadGraphArguments(TableFunctionBindInput &input, duckdb::unique_
 
 //! (start_vid, end_vid, agg_cost) -- floydWarshall and johnson.
 duckdb::unique_ptr<FunctionData> AllPairsBind(ClientContext &, TableFunctionBindInput &input,
-                                              duckdb::vector<LogicalType> &return_types,
-                                              duckdb::vector<std::string> &names) {
+                                              duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<GraphBindData>();
 	ReadGraphArguments(input, bind_data);
 	names = {"start_vid", "end_vid", "agg_cost"};
@@ -317,8 +313,7 @@ void AllPairsScan(ClientContext &, TableFunctionInput &data, DataChunk &output) 
 //! (seq, component, node|edge) -- the three component functions.
 template <const char *MemberName>
 duckdb::unique_ptr<FunctionData> ComponentBind(ClientContext &, TableFunctionBindInput &input,
-                                               duckdb::vector<LogicalType> &return_types,
-                                               duckdb::vector<std::string> &names) {
+                                               duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<GraphBindData>();
 	ReadGraphArguments(input, bind_data);
 	names = {"seq", "component", MemberName};
@@ -353,8 +348,7 @@ void ComponentScan(ClientContext &, TableFunctionInput &data, DataChunk &output)
 //! A bare identifier column -- articulationPoints and bridges.
 template <const char *ColumnName>
 duckdb::unique_ptr<FunctionData> IdentifierBind(ClientContext &, TableFunctionBindInput &input,
-                                                duckdb::vector<LogicalType> &return_types,
-                                                duckdb::vector<std::string> &names) {
+                                                duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<GraphBindData>();
 	ReadGraphArguments(input, bind_data);
 	names = {ColumnName};
@@ -385,8 +379,7 @@ void IdentifierScan(ClientContext &, TableFunctionInput &data, DataChunk &output
 
 //! (seq, start_vid, end_vid) -- makeConnected.
 duckdb::unique_ptr<FunctionData> MakeConnectedBind(ClientContext &, TableFunctionBindInput &input,
-                                                   duckdb::vector<LogicalType> &return_types,
-                                                   duckdb::vector<std::string> &names) {
+                                                   duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<GraphBindData>();
 	ReadGraphArguments(input, bind_data);
 	names = {"seq", "start_vid", "end_vid"};
@@ -394,8 +387,7 @@ duckdb::unique_ptr<FunctionData> MakeConnectedBind(ClientContext &, TableFunctio
 	return std::move(bind_data);
 }
 
-duckdb::unique_ptr<GlobalTableFunctionState> MakeConnectedInit(ClientContext &context,
-                                                               TableFunctionInitInput &input) {
+duckdb::unique_ptr<GlobalTableFunctionState> MakeConnectedInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<GraphBindData>();
 	auto state = duckdb::make_uniq<GraphGlobalState<PairRow>>();
 	auto edges = LoadEdges(context, bind_data.edges_sql);

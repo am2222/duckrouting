@@ -52,8 +52,7 @@ void RunDijkstra(const Graph &graph, uint64_t source, std::vector<uint64_t> &pre
 	    graph, source,
 	    boost::predecessor_map(
 	        boost::make_iterator_property_map(predecessor.begin(), boost::get(boost::vertex_index, graph)))
-	        .distance_map(
-	            boost::make_iterator_property_map(distance.begin(), boost::get(boost::vertex_index, graph)))
+	        .distance_map(boost::make_iterator_property_map(distance.begin(), boost::get(boost::vertex_index, graph)))
 	        .weight_map(boost::get(&RoutingEdge::cost, graph))
 	        // A true infinity, not Boost's default of numeric_limits<double>::max().
 	        // This is what lets an edge carrying the kInfiniteCost sentinel relax:
@@ -68,9 +67,8 @@ bool Reached(const std::vector<uint64_t> &predecessor, uint64_t source, uint64_t
 
 //! Turn a predecessor chain into pgRouting's per-node rows.
 template <typename Graph>
-std::vector<PathRow> ExtractPath(const Graph &graph, const VertexIndex &index,
-                                 const std::vector<uint64_t> &predecessor, uint64_t source, uint64_t sink,
-                                 int64_t start_vid, int64_t end_vid) {
+std::vector<PathRow> ExtractPath(const Graph &graph, const VertexIndex &index, const std::vector<uint64_t> &predecessor,
+                                 uint64_t source, uint64_t sink, int64_t start_vid, int64_t end_vid) {
 	std::vector<uint64_t> path;
 	for (uint64_t at = sink;; at = predecessor[at]) {
 		path.push_back(at);
@@ -347,8 +345,8 @@ std::vector<EdgeRow> WithoutArc(const std::vector<EdgeRow> &edges, int64_t verte
 
 } // namespace
 
-std::vector<ViaRow> DijkstraVia(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &via_vids,
-                                bool directed, bool strict, bool u_turn_on_edge) {
+std::vector<ViaRow> DijkstraVia(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &via_vids, bool directed,
+                                bool strict, bool u_turn_on_edge) {
 	std::vector<ViaRow> rows;
 	if (via_vids.size() < 2) {
 		return rows;
