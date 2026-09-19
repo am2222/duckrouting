@@ -107,4 +107,17 @@ struct PlacedPoint {
 //! Reads a query exposing id, x and y.
 std::vector<PlacedPoint> LoadPoints(duckdb::ClientContext &context, const std::string &points_sql);
 
+//! A point sitting partway along an edge. `fraction` is how far from the
+//! edge's source it lies, and `side` is which side of the road it is on
+//! ('r', 'l' or 'b' for both).
+struct PointOnEdge {
+	int64_t pid;
+	int64_t edge_id;
+	double fraction;
+	char side;
+};
+
+//! Reads a query exposing pid, edge_id, fraction and the optional side.
+std::vector<PointOnEdge> LoadPointsOnEdges(duckdb::ClientContext &context, const std::string &points_sql);
+
 } // namespace duckrouting

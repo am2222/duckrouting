@@ -6,6 +6,7 @@
 #include "duckdb/main/prepared_statement.hpp"
 
 #include <algorithm>
+#include <cctype>
 
 namespace duckrouting {
 
@@ -334,6 +335,68 @@ std::vector<PlacedPoint> LoadPoints(ClientContext &context, const string &points
 				}
 			}
 			points.push_back(PlacedPoint {ids[row], xs[row], ys[row]});
+		}
+	}
+	return points;
+}
+
+std::vector<PointOnEdge> LoadPointsOnEdges(ClientContext &context, const string &points_sql) {
+	Connection connection(DatabaseInstance::GetDatabase(context));
+
+	auto prepared = connection.Prepare("SELECT * FROM (" + points_sql + ") AS __duckrouting_points");
+	if (prepared->HasError()) {
+		throw BinderException("duckrouting: could not prepare the points query: %s", prepared->GetError());
+	}
+	auto &names = prepared->GetNames();
+	RequireColumn(names, "pid");
+	RequireColumn(names, "edge_id");
+	RequireColumn(names, "fraction");
+	const bool has_side = HasColumn(names, "side");
+
+	string projection = "SELECT CAST(pid AS BIGINT) AS pid, CAST(edge_id AS BIGINT) AS edge_id, "
+	                    "CAST(fraction AS DOUBLE) AS fraction, ";
+	// A point with no stated side is reachable from both.
+	projection += has_side ? "CAST(side AS VARCHAR) AS side " : "CAST('b' AS VARCHAR) AS side ";
+	projection += "FROM (" + points_sql + ") AS __duckrouting_points";
+
+	auto result = connection.Query(projection);
+	if (result->HasError()) {
+		throw InvalidInputException("duckrouting: the points query failed: %s", result->GetError());
+	}
+
+	std::vector<PointOnEdge> points;
+	while (true) {
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+		chunk->Flatten();
+		auto pids = FlatVector::GetData<int64_t>(chunk->data[0]);
+		auto edge_ids = FlatVector::GetData<int64_t>(chunk->data[1]);
+		auto fractions = FlatVector::GetData<double>(chunk->data[2]);
+		auto sides = FlatVector::GetData<duckdb::string_t>(chunk->data[3]);
+
+		for (duckdb::idx_t row = 0; row < chunk->size(); row++) {
+			for (duckdb::idx_t col = 0; col < 3; col++) {
+				if (!FlatVector::Validity(chunk->data[col]).RowIsValid(row)) {
+					throw InvalidInputException(
+					    "duckrouting: the points query returned NULL in pid, edge_id or fraction");
+				}
+			}
+			if (fractions[row] < 0 || fractions[row] > 1) {
+				throw InvalidInputException("duckrouting: 'fraction' must be between 0 and 1");
+			}
+			char side = 'b';
+			if (FlatVector::Validity(chunk->data[3]).RowIsValid(row)) {
+				const string text = sides[row].GetString();
+				if (!text.empty()) {
+					side = static_cast<char>(std::tolower(text[0]));
+				}
+			}
+			if (side != 'r' && side != 'l' && side != 'b') {
+				side = 'b';
+			}
+			points.push_back(PointOnEdge {pids[row], edge_ids[row], fractions[row], side});
 		}
 	}
 	return points;

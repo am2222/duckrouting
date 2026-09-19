@@ -37,6 +37,7 @@ duckrouting_boykov_kolmogorov	4
 duckrouting_breadth_first_search	4
 duckrouting_bridges	1
 duckrouting_connected_components	1
+duckrouting_contraction_hierarchies	2
 duckrouting_cuthill_mckee_ordering	1
 duckrouting_dag_shortest_path	4
 duckrouting_depth_first_search	4
@@ -79,3 +80,4 @@ duckrouting_topological_sort	1
 duckrouting_transitive_closure	1
 duckrouting_tsp	3
 duckrouting_tsp_euclidean	3
+duckrouting_with_points_dd	4

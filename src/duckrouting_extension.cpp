@@ -88,6 +88,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 
 	loader.RegisterFunction(duckrouting::GetTspFunction());
 	loader.RegisterFunction(duckrouting::GetTspEuclideanFunction());
+
+	loader.RegisterFunction(duckrouting::GetContractionHierarchiesFunction());
+	loader.RegisterFunction(duckrouting::GetWithPointsDDFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

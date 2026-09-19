@@ -40,7 +40,8 @@ export default defineConfig({
           { text: 'Traversal & ordering', link: '/functions/traversal' },
           { text: 'Graph analysis', link: '/functions/analysis' },
           { text: 'Maximum flow', link: '/functions/flow' },
-          { text: 'Travelling salesman', link: '/functions/tsp' }
+          { text: 'Travelling salesman', link: '/functions/tsp' },
+          { text: 'Contraction & points', link: '/functions/contraction' }
         ]
       },
       {

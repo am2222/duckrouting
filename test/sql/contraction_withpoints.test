@@ -1,0 +1,187 @@
+# name: test/sql/contraction_withpoints.test
+# description: contraction hierarchies and withPointsDD vs pgRouting
+# group: [duckrouting]
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# ---------------------------------------------------------------------------
+# duckrouting_contraction_hierarchies
+# ---------------------------------------------------------------------------
+# KNOWN DIFFERENCE: which shortcuts appear depends entirely on the order the
+# vertices are contracted in, and pgRouting does not document its priority
+# function. We contract greedily by edge difference. pgRouting's run on this
+# graph yields four shortcuts; ours yields three. Both are valid hierarchies,
+# so the tests check the properties every hierarchy must satisfy, and the
+# `metric` and `vertex_order` columns are treated as implementation-defined.
+
+# Every vertex is reported exactly once.
+query I
+SELECT count(*) FROM duckrouting_contraction_hierarchies('SELECT id, source, target, cost FROM edges', false)
+WHERE type = 'v';
+----
+17
+
+# Vertex rows carry no edge, and shortcut rows carry no order.
+query I
+SELECT count(*) FROM duckrouting_contraction_hierarchies('SELECT id, source, target, cost FROM edges', false)
+WHERE (type = 'v' AND (source <> -1 OR target <> -1 OR len(contracted_vertices) <> 0))
+   OR (type = 'e' AND (vertex_order <> -1 OR len(contracted_vertices) = 0));
+----
+0
+
+# Every contractable vertex gets an order, and orders are unique.
+query I
+SELECT count(*) FROM duckrouting_contraction_hierarchies('SELECT id, source, target, cost FROM edges', false)
+WHERE type = 'v' AND vertex_order < 1;
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT vertex_order FROM duckrouting_contraction_hierarchies('SELECT id, source, target, cost FROM edges', false)
+  WHERE type = 'v' GROUP BY vertex_order HAVING count(*) > 1
+);
+----
+0
+
+# Shortcut ids are negative and distinct, so they cannot collide with real edges.
+query I
+SELECT count(*) FROM (
+  SELECT id FROM duckrouting_contraction_hierarchies('SELECT id, source, target, cost FROM edges', false)
+  WHERE type = 'e' GROUP BY id HAVING count(*) > 1 OR min(id) >= 0
+);
+----
+0
+
+# The defining property: a shortcut must cost exactly the shortest path it
+# stands in for.
+query I
+SELECT count(*) FROM duckrouting_contraction_hierarchies('SELECT id, source, target, cost FROM edges', false) c
+JOIN duckrouting_dijkstra_cost('SELECT id, source, target, cost, reverse_cost FROM edges',
+                               [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17],
+                               [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17], false) d
+  ON d.start_vid = c.source AND d.end_vid = c.target
+WHERE c.type = 'e' AND abs(c.cost - d.agg_cost) > 1e-9;
+----
+0
+
+# forbidden keeps a vertex out of the hierarchy entirely.
+query II
+SELECT id, vertex_order FROM duckrouting_contraction_hierarchies(
+  'SELECT id, source, target, cost FROM edges', false, forbidden => [7, 8])
+WHERE type = 'v' AND id IN (7, 8) ORDER BY id;
+----
+7	-1
+8	-1
+
+# A forbidden vertex may never appear inside a shortcut either.
+query I
+SELECT count(*) FROM (
+  SELECT unnest(contracted_vertices) AS v
+  FROM duckrouting_contraction_hierarchies('SELECT id, source, target, cost FROM edges', false, forbidden => [7,8])
+  WHERE type = 'e'
+) WHERE v IN (7, 8);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_with_points_dd -- pgRouting q2
+# ---------------------------------------------------------------------------
+# Points sit partway along an edge and become vertices numbered -pid. Point 1
+# is at (1.8, 0.4) on edge 1, which runs north from (2,0); x < 2 puts it on the
+# left. Point 6 is at (2.2, 1.7) on edge 4, also northward, so it is on the
+# right.
+
+statement ok
+CREATE TABLE poi(pid BIGINT, edge_id BIGINT, fraction DOUBLE, side VARCHAR);
+
+statement ok
+INSERT INTO poi VALUES (1, 1, 0.4, 'l'), (6, 4, 0.7, 'r');
+
+# Driving on the right, a point on the left is only reachable against the
+# direction of travel -- so vertex 6 is reached the long way, via vertex 5.
+query IIIIRR
+SELECT depth, pred, node, edge, round(cost, 6), round(agg_cost, 6)
+FROM duckrouting_with_points_dd(
+  'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  'SELECT pid, edge_id, fraction, side FROM poi',
+  -1, 3.3, 'r', details => true);
+----
+0	-1	-1	-1	0	0
+1	-1	5	1	0.4	0.4
+2	5	6	1	1	1.4
+3	6	-6	4	0.7	2.1
+4	-6	7	4	0.3	2.4
+
+# With driving_side 'b' the side stops mattering and vertex 6 is reached
+# directly, at the remaining 0.6 of edge 1.
+query IIRR
+SELECT depth, node, round(cost, 6), round(agg_cost, 6)
+FROM duckrouting_with_points_dd(
+  'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  'SELECT pid, edge_id, fraction, side FROM poi',
+  -1, 1.0, 'b', details => true);
+----
+0	-1	0	0
+1	5	0.4	0.4
+1	6	0.6	0.6
+
+# The two segments of a split edge add up to the original cost.
+query I
+SELECT count(*) FROM (
+  SELECT sum(cost) AS total FROM duckrouting_with_points_dd(
+    'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+    'SELECT pid, edge_id, fraction, side FROM poi', -1, 1.0, 'b', details => true)
+  WHERE node IN (5, 6)
+) WHERE abs(total - 1.0) > 1e-9;
+----
+0
+
+# Without details the point vertices are hidden, except the start.
+query I
+SELECT count(*) FROM duckrouting_with_points_dd(
+  'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  'SELECT pid, edge_id, fraction, side FROM poi', -1, 3.3, 'r')
+WHERE node < 0 AND node <> -1;
+----
+0
+
+# The start point itself is always reported.
+query I
+SELECT count(*) FROM duckrouting_with_points_dd(
+  'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  'SELECT pid, edge_id, fraction, side FROM poi', -1, 3.3, 'r')
+WHERE node = -1;
+----
+1
+
+# An ordinary vertex works as a starting point too.
+query I
+SELECT count(*) > 0 FROM duckrouting_with_points_dd(
+  'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  'SELECT pid, edge_id, fraction, side FROM poi', 6, 2.0, 'b');
+----
+true
+
+statement error
+SELECT * FROM duckrouting_with_points_dd(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, side FROM poi', -1, 3.3, 'x');
+----
+'driving_side' must be 'r', 'l' or 'b'
+
+statement error
+SELECT * FROM duckrouting_with_points_dd(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, 1.5 AS fraction, side FROM poi', -1, 3.3, 'b');
+----
+'fraction' must be between 0 and 1

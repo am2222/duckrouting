@@ -248,6 +248,37 @@ std::vector<TourRow> Tsp(const std::vector<MatrixCell> &matrix, int64_t start_id
 //! The same, with distances computed from coordinates instead.
 std::vector<TourRow> TspEuclidean(const std::vector<PlacedPoint> &points, int64_t start_id, int64_t end_id);
 
+//! One row of the contraction-hierarchies result: either a vertex ("v") with
+//! its contraction order, or a shortcut edge ("e") with the vertices it
+//! bypasses.
+struct ContractionRow {
+	bool is_vertex;
+	int64_t id;
+	std::vector<int64_t> contracted_vertices;
+	int64_t source;
+	int64_t target;
+	double cost;
+	int64_t metric;
+	int64_t vertex_order;
+};
+
+//! Contracts the graph, replacing each removed vertex with shortcut edges that
+//! preserve shortest-path distances. Vertices listed in `forbidden` are never
+//! contracted.
+std::vector<ContractionRow> ContractionHierarchies(const std::vector<EdgeRow> &edges, bool directed,
+                                                   const std::vector<int64_t> &forbidden);
+
+//! Driving distance from a point partway along an edge. Points become vertices
+//! with id -pid. With `details` the point vertices appear in the result;
+//! without it only real vertices do.
+std::vector<DrivingDistanceRow> WithPointsDrivingDistance(const std::vector<EdgeRow> &edges,
+                                                          const std::vector<PointOnEdge> &points,
+                                                          const std::vector<int64_t> &starts, double distance,
+                                                          char driving_side, bool directed, bool details);
+
+duckdb::TableFunctionSet GetContractionHierarchiesFunction();
+duckdb::TableFunctionSet GetWithPointsDDFunction();
+
 duckdb::TableFunctionSet GetTspFunction();
 duckdb::TableFunctionSet GetTspEuclideanFunction();
 

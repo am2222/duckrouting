@@ -39,7 +39,7 @@ wrappers is unencumbered.
 | `pgr_dijkstraNear` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_near` |
 | `pgr_dijkstraNearCost` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_near_cost` |
 | `pgr_drivingDistance` | `dijkstra_shortest_paths` + visitor | `duckrouting_driving_distance` |
-| `pgr_withPointsDD` | `dijkstra_shortest_paths` + visitor | not yet |
+| `pgr_withPointsDD` | `dijkstra_shortest_paths` + visitor | `duckrouting_with_points_dd` |
 | `pgr_aStar` | `astar_search` | `duckrouting_astar` |
 | `pgr_aStarCost` | `astar_search` | `duckrouting_astar_cost` |
 | `pgr_aStarCostMatrix` | `astar_search` | `duckrouting_astar_cost_matrix` |
@@ -84,7 +84,7 @@ wrappers is unencumbered.
 | `pgr_boyerMyrvold` | `boyer_myrvold_planarity_test` (embedding) | `duckrouting_boyer_myrvold` |
 | `pgr_TSP` | `metric_tsp_approx_tour` | `duckrouting_tsp` |
 | `pgr_TSPeuclidean` | `metric_tsp_approx_tour` | `duckrouting_tsp_euclidean` |
-| `pgr_contractionHierarchies` | `dijkstra_shortest_paths` over a CH `adjacency_list` | |
+| `pgr_contractionHierarchies` | witness search by Dijkstra | `duckrouting_contraction_hierarchies` |
 
 ## Group 2 -- pgRouting's own algorithm
 
@@ -139,6 +139,19 @@ pgRouting's q93 and q133 ask for `12 -> 7` undirected. Two paths cost exactly
 equal-cost path wins, so this is not a defect in either implementation. The
 tests assert hop count, endpoints and total cost for those cases, plus a check
 that every reported edge really connects its two reported nodes.
+
+**Contraction hierarchies** depend entirely on the order vertices are
+contracted in, and pgRouting does not document its priority function.
+duckrouting contracts greedily by edge difference; on the sample graph
+pgRouting produces four shortcuts and duckrouting three. Both preserve the same
+shortest-path distances, which is what the tests check -- each shortcut must
+cost exactly the shortest path it replaces. `metric` and `vertex_order` are
+implementation-defined.
+
+**`withPointsDD`** reproduces pgRouting exactly, including the driving-side
+rule from `src/withPoints/withPoints.cpp`: on a two-way street with both sides
+definite, a point is reachable only from the direction that passes it on the
+driving side. That is why their q2 reaches vertex 6 the long way round.
 
 **TSP** is the one family that is explicitly *approximate*: `metric_tsp_approx`
 guarantees a tour at most twice the optimum when the costs obey the triangle
