@@ -1,0 +1,319 @@
+# name: test/sql/dijkstra.test
+# description: duckrouting_dijkstra checked against pgRouting's own expected output
+# group: [duckrouting]
+#
+# The edge table is pgRouting's canonical sample network (tools/testers/sampledata.pg),
+# with source/target resolved to the values pgRouting's docs publish, so no PostGIS is
+# needed. Expected results are copied from pgRouting's docqueries/dijkstra/dijkstra.result
+# and pgtap/dijkstra/dijkstra/edge_cases/. The query label in each comment (q70, q90, ...)
+# is pgRouting's own label for that case.
+#
+# Note the one-way encoding: a negative cost means the edge does not exist in that
+# direction. Edge 2 (6->10) has cost -1, so a directed route from 6 to 10 must detour,
+# while an undirected route may use it via reverse_cost.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# ---------------------------------------------------------------------------
+# Directed, with reverse_cost
+# ---------------------------------------------------------------------------
+
+# pgRouting q70: 6 -> 10. Edge 2 is one-way against us, so the route detours
+# through 7, 11, 16, 15.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	9	1	2
+4	4	6	10	16	16	1	3
+5	5	6	10	15	3	1	4
+6	6	6	10	10	-1	0	5
+
+# pgRouting q71: 6 -> 7
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 7);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+
+# pgRouting q72: 12 -> 10
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 12, 10);
+----
+1	1	12	10	12	13	1	0
+2	2	12	10	17	15	1	1
+3	3	12	10	16	16	1	2
+4	4	12	10	15	3	1	3
+5	5	12	10	10	-1	0	4
+
+# pgRouting q73: 12 -> 7
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 12, 7);
+----
+1	1	12	7	12	13	1	0
+2	2	12	7	17	15	1	1
+3	3	12	7	16	9	1	2
+4	4	12	7	11	8	1	3
+5	5	12	7	7	-1	0	4
+
+# ---------------------------------------------------------------------------
+# Undirected, with reverse_cost
+# ---------------------------------------------------------------------------
+
+# pgRouting q90: 6 -> 10 undirected now takes edge 2 directly, at reverse_cost 1.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10, false);
+----
+1	1	6	10	6	2	1	0
+2	2	6	10	10	-1	0	1
+
+# pgRouting q91: 6 -> 7 undirected
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 7, false);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+
+# pgRouting q92: 12 -> 10 undirected
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 12, 10, false);
+----
+1	1	12	10	12	11	1	0
+2	2	12	10	11	5	1	1
+3	3	12	10	10	-1	0	2
+
+# pgRouting q93: 12 -> 7 undirected.
+# KNOWN TIE: two shortest paths cost exactly 2 here -- 12-(e12)->8-(e10)->7, which
+# pgRouting reports, and 12-(e11)->11-(e8)->7, which Boost reports. Dijkstra does
+# not define which equal-cost path wins, so we assert only what is determinate:
+# the hop count, the endpoints, and the total cost.
+query IIIR
+SELECT count(*), min(start_vid), min(end_vid), max(agg_cost)
+FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 12, 7, false);
+----
+3	12	7	2
+
+# The tie-broken path must still be a real path: every reported edge exists and
+# every consecutive node pair is joined by the edge named on the earlier row.
+query I
+SELECT count(*) FROM (
+  SELECT d.node, d.edge, lead(d.node) OVER (ORDER BY d.seq) AS next_node
+  FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 12, 7, false) d
+) p JOIN edges e ON e.id = p.edge
+WHERE p.next_node IS NOT NULL
+  AND NOT ((e.source = p.node AND e.target = p.next_node) OR (e.target = p.node AND e.source = p.next_node));
+----
+0
+
+# `directed => false` is pgRouting's own spelling and must match the positional form.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10, directed => false);
+----
+1	1	6	10	6	2	1	0
+2	2	6	10	10	-1	0	1
+
+# ---------------------------------------------------------------------------
+# cost only: reverse_cost is absent, so every edge becomes strictly one-way
+# ---------------------------------------------------------------------------
+
+# pgRouting q11: 10 has no incoming edge at all once reverse_cost is gone.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges', 6, 10);
+----
+
+# pgRouting q111: 6 -> 7 still works
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges', 6, 7);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+
+# pgRouting q112: 12 -> 10 unreachable
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges', 12, 10);
+----
+
+# pgRouting q113: 12 -> 7 unreachable
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges', 12, 7);
+----
+
+# pgRouting q13: 6 -> 10 undirected, cost only
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges', 6, 10, false);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	5	1	2
+4	4	6	10	10	-1	0	3
+
+# pgRouting q132: 12 -> 10 undirected, cost only
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges', 12, 10, false);
+----
+1	1	12	10	12	11	1	0
+2	2	12	10	11	5	1	1
+3	3	12	10	10	-1	0	2
+
+# pgRouting q133: 12 -> 7 undirected, cost only.
+# KNOWN TIE, same shape as q93 above: 12->8->7 and 12->11->7 both cost 2.
+query IIIR
+SELECT count(*), min(start_vid), min(end_vid), max(agg_cost)
+FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges', 12, 7, false);
+----
+3	12	7	2
+
+# ---------------------------------------------------------------------------
+# Degenerate graphs, from pgtap edge_cases/zero_one_edge_no_reverse.pg
+# ---------------------------------------------------------------------------
+
+# Zero edges: every query is empty rather than an error.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges WHERE id > 18', 7, 11);
+----
+
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges WHERE id > 18', 11, 7, false);
+----
+
+# A single edge 11->16 cannot serve a 7->11 request in either orientation.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges WHERE id = 9', 7, 11);
+----
+
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges WHERE id = 9', 11, 7);
+----
+
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges WHERE id = 9', 7, 11, false);
+----
+
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges WHERE id = 9', 11, 7, false);
+----
+
+# The single edge itself routes fine.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges WHERE id = 9', 11, 16);
+----
+1	1	11	16	11	9	1	0
+2	2	11	16	16	-1	0	1
+
+# ---------------------------------------------------------------------------
+# Endpoints that are missing or coincide
+# ---------------------------------------------------------------------------
+
+# pgRouting reports a coincident start/end as zero rows, not a zero-length path.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 6);
+----
+
+# A vertex that does not exist in the graph is empty, not an error.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 9999);
+----
+
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 9999, 6);
+----
+
+# Disconnected component: 13->14 is its own island.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 14);
+----
+
+# ---------------------------------------------------------------------------
+# Input validation
+# ---------------------------------------------------------------------------
+
+statement error
+SELECT * FROM duckrouting_dijkstra('SELECT id, source, target FROM edges', 6, 10);
+----
+must expose a 'cost' column
+
+statement error
+SELECT * FROM duckrouting_dijkstra('SELECT id AS wrong, source, target, cost FROM edges', 6, 10);
+----
+must expose a 'id' column
+
+statement error
+SELECT * FROM duckrouting_dijkstra('NOT VALID SQL', 6, 10);
+----
+could not prepare the edges query
+
+# A NULL reverse_cost means "no reverse edge", exactly like a negative one.
+statement ok
+CREATE TABLE nulled AS SELECT id, source, target, cost, CASE WHEN reverse_cost < 0 THEN NULL ELSE reverse_cost END AS reverse_cost FROM edges;
+
+# Same known tie as q93; assert the determinate part. What matters here is that
+# NULL and -1 produce the identical graph.
+query IIIR
+SELECT count(*), min(start_vid), min(end_vid), max(agg_cost)
+FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM nulled', 12, 7, false);
+----
+3	12	7	2
+
+# NULL-as-reverse_cost and -1-as-reverse_cost must agree row for row.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM nulled', 6, 10)
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10)
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# KNOWN DIVERGENCE FROM pgRouting: infinite edge cost
+# ---------------------------------------------------------------------------
+# pgRouting's pgtap/dijkstra/dijkstra/edge_cases/infinity_cost.pg sets edge 7
+# (3->7) to 'Infinity' and then expects routes through it to come back with
+# agg_cost = Infinity -- that is, a path is still reported, just an infinitely
+# expensive one. Boost never relaxes such an edge, because the relaxation test
+# is `dist[u] + w < dist[v]`, and with distance_inf set to a true infinity that
+# reduces to `inf < inf`, which is false. We therefore report no path at all.
+#
+# We pass .distance_inf(infinity()) exactly as pgRouting does, so this is not a
+# missing option; the mechanism pgRouting uses to produce an Infinity path has
+# not been identified. These assertions pin our CURRENT behaviour so that a
+# future change is visible, and are NOT pgRouting-verified.
+
+statement ok
+CREATE TABLE inf_edges AS SELECT * FROM edges;
+
+statement ok
+UPDATE inf_edges SET cost = 'Infinity' WHERE id = 7;
+
+# Before the change, 1 -> 11 costs 3. This part does match pgRouting (its q0).
+query R
+SELECT max(agg_cost) FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM edges', 1, 11);
+----
+3
+
+# pgRouting expects one row with agg_cost = Infinity here; we return zero rows.
+query I
+SELECT count(*) FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM inf_edges', 3, 7);
+----
+0
+
+query I
+SELECT count(*) FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM inf_edges', 1, 11);
+----
+0
+
+# Routes that avoid the infinite edge are unaffected (pgRouting's q1).
+query R
+SELECT max(agg_cost) FROM duckrouting_dijkstra('SELECT id, source, target, cost FROM inf_edges', 1, 3);
+----
+1

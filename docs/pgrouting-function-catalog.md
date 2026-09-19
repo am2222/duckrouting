@@ -1,0 +1,135 @@
+# pgRouting function catalog
+
+A survey of every function pgRouting exposes, classified by whether the
+**algorithm** comes from the Boost Graph Library or from pgRouting's own C++.
+This drives the duckrouting port order: the BGL-backed functions are reachable
+by writing fresh glue over Boost, while the hand-written ones would have to be
+reimplemented from scratch.
+
+Derived from the pgRouting source tree (`src/`, `include/`), not from the
+prose docs -- each row was confirmed by finding the actual `boost::` call.
+
+## Read this first: the graph itself is always Boost
+
+`include/cpp_common/base_graph.hpp` is a `boost::adjacency_list`. Practically
+every pgRouting C++ function therefore touches Boost *somewhere*. The split
+below is the one that matters for porting:
+
+- **Group 1** -- BGL supplies the algorithm. Glue code only.
+- **Group 2** -- pgRouting wrote the algorithm. Boost is just the container, or absent.
+- **Group 3** -- no C++ at all; pure SQL / PL-pgSQL, some needing PostGIS.
+
+## Licensing
+
+pgRouting is **GPL-2.0-or-later**. Group 2 source cannot be lifted into a
+permissively-licensed extension -- those need clean-room reimplementation.
+Group 1 is mostly glue over Boost, which is BSL-1.0, so writing our own
+wrappers is unencumbered.
+
+---
+
+## Group 1 -- Boost supplies the algorithm
+
+| Function(s) | BGL algorithm | duckrouting |
+| --- | --- | --- |
+| `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_dijkstraCostMatrix`, `pgr_dijkstraVia`, `pgr_dijkstraNear`, `pgr_dijkstraNearCost` | `dijkstra_shortest_paths` / `_no_init` | `duckrouting_dijkstra` (one-to-one) |
+| `pgr_drivingDistance`, `pgr_withPointsDD` | `dijkstra_shortest_paths` + visitor | |
+| `pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix` | `astar_search` | |
+| `pgr_floydWarshall` | `floyd_warshall_all_pairs_shortest_paths` | |
+| `pgr_johnson` | `johnson_all_pairs_shortest_paths` | |
+| `pgr_bellmanFord`, `pgr_bellmanFord` (neg) | `bellman_ford_shortest_paths` | |
+| `pgr_dagShortestPath` | `dag_shortest_paths` | |
+| `pgr_connectedComponents` | `connected_components` | |
+| `pgr_strongComponents` | `strong_components` | |
+| `pgr_biconnectedComponents`, `pgr_articulationPoints`, `pgr_bridges` | `biconnected_components` | |
+| `pgr_makeConnected` | `make_connected` | |
+| `pgr_kruskal`, `pgr_kruskalBFS`, `pgr_kruskalDD`, `pgr_kruskalDFS` | `kruskal_minimum_spanning_tree` | |
+| `pgr_prim`, `pgr_primBFS`, `pgr_primDD`, `pgr_primDFS` | `prim_minimum_spanning_tree` | |
+| `pgr_breadthFirstSearch` | `breadth_first_search` | |
+| `pgr_depthFirstSearch` | `depth_first_search` / `undirected_dfs` | |
+| `pgr_maxFlow`, `pgr_pushRelabel` | `push_relabel_max_flow` | |
+| `pgr_edmondsKarp` | `edmonds_karp_max_flow` | |
+| `pgr_boykovKolmogorov` | `boykov_kolmogorov_max_flow` | |
+| `pgr_edgeDisjointPaths` | runs on the same BGL flow graph | |
+| `pgr_maxFlowMinCost`, `pgr_maxFlowMinCost_Cost` | `successive_shortest_path_nonnegative_weights` + `find_flow_cost` | |
+| `pgr_maxCardinalityMatch` | `edmonds_maximum_cardinality_matching` | |
+| `pgr_stoerWagner` | `stoer_wagner_min_cut` | |
+| `pgr_transitiveClosure` | `transitive_closure` | |
+| `pgr_lengauerTarjanDominatorTree` | `dominator_tree` | |
+| `pgr_hawickCircuits` | `hawick_circuits` | |
+| `pgr_bandwidth` | `bandwidth` | |
+| `pgr_betweennessCentrality` | `brandes_betweenness_centrality` | |
+| `pgr_sequentialVertexColoring` | `sequential_vertex_coloring` | |
+| `pgr_edgeColoring` | `edge_coloring` | |
+| `pgr_bipartite` | `is_bipartite` | |
+| `pgr_cuthillMckeeOrdering` | `cuthill_mckee_ordering` | |
+| `pgr_kingOrdering` | `king_ordering` | |
+| `pgr_sloanOrdering` | `sloan_ordering` | |
+| `pgr_topologicalSort` | `topological_sort` | |
+| `pgr_boyerMyrvold`, `pgr_isPlanar` | `boyer_myrvold_planarity_test` | |
+| `pgr_TSP`, `pgr_TSPeuclidean` | `metric_tsp_approx_tour` | |
+| `pgr_contractionHierarchies` | `dijkstra_shortest_paths` over a CH `adjacency_list` | |
+
+## Group 2 -- pgRouting's own algorithm
+
+| Function(s) | What it actually is |
+| --- | --- |
+| `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix` | `cpp_common/bidirectional.hpp` -- own `std::priority_queue` bidirectional search |
+| `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix` | same hand-written bidirectional base, plus a heuristic |
+| `pgr_KSP`, `pgr_withPointsKSP`, `pgr_turnRestrictedPath` | `include/yen/ksp.hpp` -- own Yen's algorithm, calling the BGL-backed Dijkstra as inner solver |
+| `pgr_trsp`, `pgr_trspVia`, `pgr_trsp_withPoints`, `pgr_trspVia_withPoints` | `trsp/trspHandler.cpp` -- own turn-restriction search. Zero `boost::` symbols |
+| `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`, `pgr_withPointsVia` | own edge-splitting graph rewrite, then delegates |
+| `pgr_edwardMoore` | own SPFA; Boost only for edge iteration |
+| `pgr_binaryBreadthFirstSearch` | own 0-1 BFS; Boost only for edge iteration |
+| `pgr_chinesePostman`, `pgr_chinesePostmanCost` | own. Zero `boost::` symbols |
+| `pgr_lineGraph`, `pgr_lineGraphFull` | own line-graph construction |
+| `pgr_pickDeliver`, `pgr_pickDeliverEuclidean` | own VRPPDTW heuristic, 17 source files. Zero `boost::` symbols |
+| `pgr_vrpOneDepot` | own legacy VRP code |
+| `pgr_contraction`, `pgr_deadEndContraction`, `pgr_linearContraction` | own contraction operators applied to a `boost::adjacency_list` |
+
+## Group 3 -- no C++; pure SQL / PL-pgSQL
+
+| Function | Notes |
+| --- | --- |
+| `pgr_extractVertices` | derives a vertex table from edges |
+| `pgr_findCloseEdges` | needs PostGIS geometry predicates |
+| `pgr_separateCrossing` | needs PostGIS |
+| `pgr_separateTouching` | needs PostGIS |
+| `pgr_degree` | vertex degree over the edge table |
+| `pgr_version`, `pgr_full_version` | metadata |
+
+## Tally
+
+| Group | Count |
+| --- | --- |
+| 1 -- Boost algorithm | ~55 |
+| 2 -- pgRouting's own | ~30 |
+| 3 -- pure SQL | 7 |
+
+---
+
+## Porting notes: where duckrouting differs from pgRouting
+
+Both of these were found by running pgRouting's own test corpus
+(`docqueries/dijkstra/`, `pgtap/dijkstra/`) against `duckrouting_dijkstra`.
+See `test/sql/dijkstra.test`.
+
+### Equal-cost paths tie-break differently
+
+pgRouting's q93 and q133 ask for `12 -> 7` undirected. Two paths cost exactly
+2: `12-(e12)->8-(e10)->7`, which pgRouting reports, and
+`12-(e11)->11-(e8)->7`, which Boost reports. Dijkstra does not define which
+equal-cost path wins, so this is not a defect in either implementation. The
+tests assert hop count, endpoints and total cost for those cases, plus a check
+that every reported edge really connects its two reported nodes.
+
+### An infinite edge cost yields no path instead of an infinite one
+
+`pgtap/.../edge_cases/infinity_cost.pg` sets an edge to `'Infinity'` and expects
+routes through it to return `agg_cost = Infinity` -- a path is still reported.
+duckrouting returns zero rows instead. Boost's relaxation test is
+`dist[u] + w < dist[v]`; with `distance_inf` set to a true infinity that becomes
+`inf < inf`, which is false, so the edge is never relaxed. We pass
+`.distance_inf(std::numeric_limits<double>::infinity())` exactly as pgRouting
+does, so this is not a missing option -- the mechanism pgRouting uses to produce
+an infinite-cost path has not been identified. Unresolved.

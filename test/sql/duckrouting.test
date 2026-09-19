@@ -1,23 +1,23 @@
 # name: test/sql/duckrouting.test
-# description: test duckrouting extension
-# group: [sql]
+# description: test duckrouting extension loading and registration
+# group: [duckrouting]
 
 # Before we load the extension, this will fail
 statement error
-SELECT duckrouting('Sam');
+SELECT duckrouting_version('Sam');
 ----
-Catalog Error: Scalar Function with name duckrouting does not exist!
+Catalog Error: Scalar Function with name duckrouting_version does not exist!
 
 # Require statement will ensure this test is run with this extension loaded
 require duckrouting
 
-# Confirm the extension works
 query I
-SELECT duckrouting('Sam');
-----
-...........🦆 Sam
-
-query I
-SELECT duckrouting_openssl_version('Michael') ILIKE 'Duckrouting Michael, my linked OpenSSL version is OpenSSL%';
+SELECT duckrouting_version('Sam') ILIKE 'Duckrouting Sam, built against Boost %';
 ----
 true
+
+# The routing table functions are registered under both arities.
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'duckrouting_dijkstra';
+----
+2
