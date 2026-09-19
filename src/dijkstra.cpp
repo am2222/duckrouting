@@ -1,6 +1,7 @@
 #include "duckrouting/dijkstra.hpp"
 
 #include "duckrouting/graph.hpp"
+#include "duckrouting/yen.hpp"
 
 #include <boost/graph/dijkstra_shortest_paths.hpp>
 
@@ -287,6 +288,151 @@ std::vector<DrivingDistanceRow> DrivingDistance(const std::vector<EdgeRow> &edge
 		}
 		return a.node < b.node;
 	});
+	return rows;
+}
+
+std::vector<ViaRow> DijkstraVia(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &via_vids,
+                                bool directed) {
+	std::vector<ViaRow> rows;
+	if (via_vids.size() < 2) {
+		return rows;
+	}
+
+	// Collect the legs first, so we know which one is last and therefore which
+	// row carries pgRouting's -2 terminator.
+	std::vector<std::vector<PathRow>> legs;
+	for (size_t i = 0; i + 1 < via_vids.size(); i++) {
+		std::vector<int64_t> from(1, via_vids[i]);
+		std::vector<int64_t> to(1, via_vids[i + 1]);
+		auto leg = Dijkstra(edges, from, to, directed);
+		// An unreachable leg contributes nothing and the route carries on from
+		// the next via vertex.
+		if (!leg.empty()) {
+			legs.push_back(leg);
+		}
+	}
+
+	double route_agg_cost = 0;
+	for (size_t l = 0; l < legs.size(); l++) {
+		const bool last_leg = (l + 1 == legs.size());
+		const std::vector<PathRow> &leg = legs[l];
+		for (size_t i = 0; i < leg.size(); i++) {
+			ViaRow row {};
+			row.path_id = static_cast<int64_t>(l) + 1;
+			row.path_seq = leg[i].path_seq;
+			row.start_vid = leg[i].start_vid;
+			row.end_vid = leg[i].end_vid;
+			row.node = leg[i].node;
+			row.edge = leg[i].edge;
+			row.cost = leg[i].cost;
+			row.agg_cost = leg[i].agg_cost;
+			row.route_agg_cost = route_agg_cost + leg[i].agg_cost;
+			if (last_leg && i + 1 == leg.size()) {
+				// pgRouting closes the whole route with -2 rather than -1.
+				row.edge = -2;
+			}
+			rows.push_back(row);
+		}
+		route_agg_cost += leg.back().agg_cost;
+	}
+	return rows;
+}
+
+namespace {
+
+//! The `cap` cheapest pairs, ordered by cost then by the vertex ids so that
+//! ties are at least deterministic.
+std::vector<CostRow> NearestPairs(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                  const std::vector<int64_t> &ends, bool directed, int64_t cap) {
+	auto costs = DijkstraCost(edges, starts, ends, directed);
+	std::stable_sort(costs.begin(), costs.end(), [](const CostRow &a, const CostRow &b) {
+		if (a.agg_cost != b.agg_cost) {
+			return a.agg_cost < b.agg_cost;
+		}
+		if (a.start_vid != b.start_vid) {
+			return a.start_vid < b.start_vid;
+		}
+		return a.end_vid < b.end_vid;
+	});
+	if (cap > 0 && static_cast<int64_t>(costs.size()) > cap) {
+		costs.resize(static_cast<size_t>(cap));
+	}
+	return costs;
+}
+
+} // namespace
+
+std::vector<CostRow> DijkstraNearCost(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                      const std::vector<int64_t> &ends, bool directed, int64_t cap) {
+	return NearestPairs(edges, starts, ends, directed, cap);
+}
+
+std::vector<PathRow> DijkstraNear(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                  const std::vector<int64_t> &ends, bool directed, int64_t cap) {
+	const auto chosen = NearestPairs(edges, starts, ends, directed, cap);
+	std::vector<PathRow> rows;
+	for (size_t i = 0; i < chosen.size(); i++) {
+		std::vector<int64_t> from(1, chosen[i].start_vid);
+		std::vector<int64_t> to(1, chosen[i].end_vid);
+		auto path = Dijkstra(edges, from, to, directed);
+		rows.insert(rows.end(), path.begin(), path.end());
+	}
+	return rows;
+}
+
+std::vector<KspRow> Ksp(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                        const std::vector<int64_t> &ends, int64_t k, bool directed, bool heap_paths) {
+	const auto normalized_starts = Normalize(starts);
+	const auto normalized_ends = Normalize(ends);
+
+	VertexIndex index;
+	Adjacency adjacency = BuildAdjacency(edges, index, directed);
+
+	std::vector<KspRow> rows;
+	// path_id runs across the whole result rather than restarting per pair,
+	// which is what pgRouting does.
+	int64_t path_id = 0;
+	for (size_t s = 0; s < normalized_starts.size(); s++) {
+		uint64_t source = 0;
+		if (!index.Find(normalized_starts[s], source)) {
+			continue;
+		}
+		for (size_t e = 0; e < normalized_ends.size(); e++) {
+			if (normalized_ends[e] == normalized_starts[s]) {
+				continue;
+			}
+			uint64_t sink = 0;
+			if (!index.Find(normalized_ends[e], sink)) {
+				continue;
+			}
+
+			std::vector<SimplePath> selected;
+			std::vector<SimplePath> rejected;
+			YenKShortestPaths(adjacency, source, sink, k, selected, rejected);
+			if (heap_paths) {
+				selected.insert(selected.end(), rejected.begin(), rejected.end());
+			}
+
+			for (size_t p = 0; p < selected.size(); p++) {
+				path_id++;
+				double agg_cost = 0;
+				for (size_t i = 0; i < selected[p].steps.size(); i++) {
+					const PathStep &step = selected[p].steps[i];
+					KspRow row {};
+					row.path_id = path_id;
+					row.path_seq = static_cast<int64_t>(i) + 1;
+					row.start_vid = normalized_starts[s];
+					row.end_vid = normalized_ends[e];
+					row.node = index.IdOf(step.vertex);
+					row.edge = step.edge;
+					row.cost = DecodeInfinity(step.cost);
+					row.agg_cost = DecodeInfinity(agg_cost);
+					agg_cost += step.cost;
+					rows.push_back(row);
+				}
+			}
+		}
+	}
 	return rows;
 }
 

@@ -1,0 +1,171 @@
+# name: test/sql/ksp.test
+# description: duckrouting_ksp (Yen's k shortest loopless paths) vs pgRouting
+# group: [duckrouting]
+#
+# Expected results from pgRouting docqueries/ksp/ksp.result. KSP is the one
+# function in this family that is NOT a Boost algorithm -- Boost has no
+# k-shortest-paths routine -- so this is Yen's algorithm implemented directly.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# ---------------------------------------------------------------------------
+# pgRouting q1: 6 -> 17, K = 2
+# ---------------------------------------------------------------------------
+# KNOWN TIE: both paths cost 4, so which is path_id 1 is not defined. pgRouting
+# reports 6,7,8,12,17 first; we report 6,7,11,16,17 first. Assert the set of
+# paths and their costs, not the ordering.
+
+query II
+SELECT path_id, count(*) FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 2)
+GROUP BY path_id ORDER BY path_id;
+----
+1	5
+2	5
+
+# Both paths cost 4.
+query R
+SELECT DISTINCT agg_cost FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 2)
+WHERE edge = -1;
+----
+4
+
+# The two node sequences are exactly the pair pgRouting reports.
+query T
+SELECT list_aggregate(list(node ORDER BY path_seq), 'string_agg', ',') AS path
+FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 2)
+GROUP BY path_id ORDER BY path;
+----
+6,7,11,16,17
+6,7,8,12,17
+
+# ---------------------------------------------------------------------------
+# pgRouting q2: 6 -> [10, 17], K = 2. path_id runs across pairs, not per pair.
+# ---------------------------------------------------------------------------
+
+query III
+SELECT count(*), min(path_id), max(path_id)
+FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10,17], 2);
+----
+24	1	4
+
+# Each pair gets its own K paths.
+query III
+SELECT start_vid, end_vid, count(DISTINCT path_id)
+FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10,17], 2)
+GROUP BY start_vid, end_vid ORDER BY end_vid;
+----
+6	10	2
+6	17	2
+
+# The cheapest path for the 6 -> 10 pair costs 5, matching pgRouting's q2.
+query R
+SELECT min(agg_cost) FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10,17], 2)
+WHERE edge = -1 AND end_vid = 10;
+----
+5
+
+# ---------------------------------------------------------------------------
+# Properties that must hold for any k-shortest-paths result
+# ---------------------------------------------------------------------------
+
+# K = 1 must reproduce duckrouting_dijkstra exactly.
+query I
+SELECT count(*) FROM (
+  SELECT path_seq, start_vid, end_vid, node, edge, cost, agg_cost
+  FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 1)
+  EXCEPT
+  SELECT path_seq, start_vid, end_vid, node, edge, cost, agg_cost
+  FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17)
+);
+----
+0
+
+# Paths must be loopless: no node repeats within a path.
+query I
+SELECT count(*) FROM (
+  SELECT path_id, node FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 5)
+  GROUP BY path_id, node HAVING count(*) > 1
+);
+----
+0
+
+# Paths must be distinct from one another.
+query I
+SELECT count(*) FROM (
+  SELECT list_aggregate(list(node ORDER BY path_seq), 'string_agg', ',') AS path
+  FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 5)
+  GROUP BY path_id
+) GROUP BY path HAVING count(*) > 1;
+----
+
+# Costs must be non-decreasing in path_id: path 1 is the cheapest.
+query I
+SELECT count(*) FROM (
+  SELECT path_id, agg_cost,
+         lag(agg_cost) OVER (ORDER BY path_id) AS previous
+  FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 5)
+  WHERE edge = -1
+) WHERE previous IS NOT NULL AND agg_cost < previous;
+----
+0
+
+# Every reported edge really joins its two reported nodes.
+query I
+SELECT count(*) FROM (
+  SELECT k.node, k.edge, lead(k.node) OVER (PARTITION BY k.path_id ORDER BY k.path_seq) AS next_node
+  FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 5) k
+) p JOIN edges e ON e.id = p.edge
+WHERE p.next_node IS NOT NULL
+  AND NOT ((e.source = p.node AND e.target = p.next_node) OR (e.target = p.node AND e.source = p.next_node));
+----
+0
+
+# Asking for more paths than exist simply returns fewer.
+query I
+SELECT count(DISTINCT path_id) <= 50 FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 50);
+----
+true
+
+# ---------------------------------------------------------------------------
+# heap_paths and options
+# ---------------------------------------------------------------------------
+
+# pgRouting q6: undirected with heap_paths returns the selected paths plus the
+# candidates that were generated but not chosen, so at least K.
+query I
+SELECT count(DISTINCT path_id) >= 2 FROM duckrouting_ksp(
+  'SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 2, directed => false, heap_paths => true);
+----
+true
+
+# Without heap_paths the result is capped at K.
+query I
+SELECT count(DISTINCT path_id) FROM duckrouting_ksp(
+  'SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 2, directed => false);
+----
+2
+
+# Unreachable pair yields no rows; coincident endpoints are skipped.
+query I
+SELECT count(*) FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 14, 2);
+----
+0
+
+query I
+SELECT count(*) FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 6, 2);
+----
+0
+
+statement error
+SELECT * FROM duckrouting_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 0);
+----
+K must be at least 1

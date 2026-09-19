@@ -21,7 +21,8 @@ set(EXTENSION_SOURCES
     src/duckrouting_extension.cpp
     src/edges.cpp
     src/dijkstra.cpp
-    src/functions.cpp)
+    src/functions.cpp
+    src/yen.cpp)
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})

@@ -28,6 +28,10 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetDijkstraCostFunction());
 	loader.RegisterFunction(duckrouting::GetDijkstraCostMatrixFunction());
 	loader.RegisterFunction(duckrouting::GetDrivingDistanceFunction());
+	loader.RegisterFunction(duckrouting::GetDijkstraViaFunction());
+	loader.RegisterFunction(duckrouting::GetDijkstraNearFunction());
+	loader.RegisterFunction(duckrouting::GetDijkstraNearCostFunction());
+	loader.RegisterFunction(duckrouting::GetKspFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

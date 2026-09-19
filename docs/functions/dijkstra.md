@@ -190,9 +190,142 @@ reached at cost 2 via either vertex 12 or vertex 16. Do not assert on a
 specific tie-break; assert on `agg_cost`.
 :::
 
-## Not yet implemented
+## duckrouting_dijkstra_via
 
-These belong to the family and are Boost-backed, but are not built yet:
-`pgr_dijkstraVia`, `pgr_dijkstraNear`, `pgr_dijkstraNearCost`.
-`pgr_KSP` (Yen) is in the family too but is not a Boost algorithm -- see the
-[pgRouting catalog](/pgrouting-function-catalog).
+### Signatures
+
+```sql
+TABLE duckrouting_dijkstra_via (edges_sql VARCHAR, via_vids BIGINT[])
+TABLE duckrouting_dijkstra_via (edges_sql VARCHAR, via_vids BIGINT[], directed BOOLEAN)
+-- also accepts directed => BOOLEAN
+```
+
+### Description
+
+Routes through a sequence of vertices in order, one leg per consecutive pair.
+Returns `seq`, `path_id`, `path_seq`, `start_vid`, `end_vid`, `node`, `edge`,
+`cost`, `agg_cost` and `route_agg_cost`.
+
+`path_id` numbers the legs from 1. `agg_cost` restarts on each leg, while
+`route_agg_cost` accumulates across the whole route. The last row of every leg
+carries `edge = -1`, except the last leg of the route, which carries `-2` --
+that is how pgRouting marks the end of the journey rather than the end of a leg.
+
+A leg with no path contributes no rows and the route continues from the next
+via vertex.
+
+### Example
+
+```sql
+SELECT path_id, node, edge, agg_cost, route_agg_cost
+FROM duckrouting_dijkstra_via(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  [5, 1, 8]);
+-- → path_id  node  edge  agg_cost  route_agg_cost
+-- →       1     5     1       0.0             0.0
+-- →       1     6     4       1.0             1.0
+-- →       1     7     7       2.0             2.0
+-- →       1     3     6       3.0             3.0
+-- →       1     1    -1       4.0             4.0
+-- →       2     1     6       0.0             4.0
+-- →       2     3     7       1.0             5.0
+-- →       2     7    10       2.0             6.0
+-- →       2     8    -2       3.0             7.0
+```
+
+The total for the whole route is the `route_agg_cost` on the `-2` row:
+
+```sql
+SELECT route_agg_cost FROM duckrouting_dijkstra_via(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  [5, 7, 1, 8, 15])
+WHERE edge = -2;
+-- → 11.0
+```
+
+## duckrouting_dijkstra_near
+
+### Signatures
+
+```sql
+TABLE duckrouting_dijkstra_near (edges_sql VARCHAR, start_vid BIGINT,   end_vid BIGINT)
+TABLE duckrouting_dijkstra_near (edges_sql VARCHAR, start_vid BIGINT,   end_vid BIGINT[])
+TABLE duckrouting_dijkstra_near (edges_sql VARCHAR, start_vid BIGINT[], end_vid BIGINT)
+TABLE duckrouting_dijkstra_near (edges_sql VARCHAR, start_vid BIGINT[], end_vid BIGINT[])
+-- each also accepts a trailing directed BOOLEAN,
+-- plus named directed => BOOLEAN and cap => BIGINT
+```
+
+### Description
+
+Of all the (start, end) combinations, returns only the `cap` cheapest, as full
+paths. `cap` defaults to 1, so by default you get the single nearest pair.
+
+Column shape is identical to `duckrouting_dijkstra`. Use this to answer "which
+of these depots is closest, and how do I get there" in one query instead of
+routing to every candidate and sorting afterwards.
+
+### Example
+
+Of vertices 10, 11 and 1, which is nearest to 6?
+
+```sql
+SELECT start_vid, end_vid, node, edge, agg_cost
+FROM duckrouting_dijkstra_near(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  6, [10, 11, 1]);
+-- → start_vid  end_vid  node  edge  agg_cost
+-- →         6       11     6     4       0.0
+-- →         6       11     7     8       1.0
+-- →         6       11    11    -1       2.0
+```
+
+`cap` takes the two cheapest pairs across every start:
+
+```sql
+SELECT start_vid, end_vid, node, edge, agg_cost
+FROM duckrouting_dijkstra_near(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  [10, 11, 1], 6, cap => 2);
+-- → start_vid  end_vid  node  edge  agg_cost
+-- →        10        6    10     2       0.0
+-- →        10        6     6    -1       1.0
+-- →        11        6    11     8       0.0
+-- →        11        6     7     4       1.0
+-- →        11        6     6    -1       2.0
+```
+
+## duckrouting_dijkstra_near_cost
+
+### Signatures
+
+```sql
+TABLE duckrouting_dijkstra_near_cost (edges_sql VARCHAR, start_vid BIGINT,   end_vid BIGINT)
+TABLE duckrouting_dijkstra_near_cost (edges_sql VARCHAR, start_vid BIGINT,   end_vid BIGINT[])
+TABLE duckrouting_dijkstra_near_cost (edges_sql VARCHAR, start_vid BIGINT[], end_vid BIGINT)
+TABLE duckrouting_dijkstra_near_cost (edges_sql VARCHAR, start_vid BIGINT[], end_vid BIGINT[])
+-- each also accepts a trailing directed BOOLEAN,
+-- plus named directed => BOOLEAN and cap => BIGINT
+```
+
+### Description
+
+The same selection as `duckrouting_dijkstra_near`, returning only
+`start_vid`, `end_vid` and `agg_cost`.
+
+### Example
+
+```sql
+SELECT * FROM duckrouting_dijkstra_near_cost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  [10, 11, 1], 6, cap => 2);
+-- → start_vid  end_vid  agg_cost
+-- →        10        6       1.0
+-- →        11        6       2.0
+```
+
+## See also
+
+[`duckrouting_ksp`](/functions/ksp) returns the *k* shortest paths for a pair
+rather than only the best one. It is grouped with this family by pgRouting but
+is not a Boost algorithm.

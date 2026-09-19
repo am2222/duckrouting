@@ -1,0 +1,152 @@
+# name: test/sql/dijkstra_via_near.test
+# description: dijkstra_via / dijkstra_near / dijkstra_near_cost vs pgRouting output
+# group: [duckrouting]
+#
+# Expected results copied from pgRouting docqueries/dijkstra/dijkstraVia.result,
+# dijkstraNear.result and dijkstraNearCost.result. Query labels (q01, q1, ...)
+# are pgRouting's own.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# ---------------------------------------------------------------------------
+# duckrouting_dijkstra_via
+# ---------------------------------------------------------------------------
+
+# pgRouting q01: route 5 -> 1 -> 8 as two legs. agg_cost restarts per leg while
+# route_agg_cost runs across the whole route, and the final leg is terminated
+# with edge -2 rather than -1.
+query IIIIIIRRR
+SELECT path_id, path_seq, start_vid, end_vid, node, edge, cost, agg_cost, route_agg_cost
+FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,1,8]);
+----
+1	1	5	1	5	1	1	0	0
+1	2	5	1	6	4	1	1	1
+1	3	5	1	7	7	1	2	2
+1	4	5	1	3	6	1	3	3
+1	5	5	1	1	-1	0	4	4
+2	1	1	8	1	6	1	0	4
+2	2	1	8	3	7	1	1	5
+2	3	1	8	7	10	1	2	6
+2	4	1	8	8	-2	0	3	7
+
+# pgRouting q1: four legs through 5, 7, 1, 8, 15.
+query IIIIIIRRR
+SELECT path_id, path_seq, start_vid, end_vid, node, edge, cost, agg_cost, route_agg_cost
+FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,7,1,8,15]);
+----
+1	1	5	7	5	1	1	0	0
+1	2	5	7	6	4	1	1	1
+1	3	5	7	7	-1	0	2	2
+2	1	7	1	7	7	1	0	2
+2	2	7	1	3	6	1	1	3
+2	3	7	1	1	-1	0	2	4
+3	1	1	8	1	6	1	0	4
+3	2	1	8	3	7	1	1	5
+3	3	1	8	7	10	1	2	6
+3	4	1	8	8	-1	0	3	7
+4	1	8	15	8	12	1	0	7
+4	2	8	15	12	13	1	1	8
+4	3	8	15	17	15	1	2	9
+4	4	8	15	16	16	1	3	10
+4	5	8	15	15	-2	0	4	11
+
+# pgRouting q2/q3: the leg total and the route total at the end of leg 3.
+query RR
+SELECT agg_cost, route_agg_cost
+FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,7,1,8,15])
+WHERE path_id = 3 AND edge < 0;
+----
+3	7
+
+# Exactly one row in the whole route carries the -2 terminator.
+query I
+SELECT count(*) FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5,7,1,8,15])
+WHERE edge = -2;
+----
+1
+
+# A single via vertex cannot form a leg.
+query I
+SELECT count(*) FROM duckrouting_dijkstra_via('SELECT id, source, target, cost, reverse_cost FROM edges', [5]);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_dijkstra_near
+# ---------------------------------------------------------------------------
+
+# pgRouting q1: of 10, 11 and 1, vertex 11 is nearest to 6.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra_near('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10,11,1]);
+----
+1	1	6	11	6	4	1	0
+2	2	6	11	7	8	1	1
+3	3	6	11	11	-1	0	2
+
+# pgRouting q2: cap picks the two cheapest pairs across all starts.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra_near('SELECT id, source, target, cost, reverse_cost FROM edges', [10,11,1], 6, true, cap => 2);
+----
+1	1	10	6	10	2	1	0
+2	2	10	6	6	-1	0	1
+3	1	11	6	11	8	1	0
+4	2	11	6	7	4	1	1
+5	3	11	6	6	-1	0	2
+
+# pgRouting q3: undirected, the single nearest pair is 15 -> 10.
+query IIIIIIRR
+SELECT * FROM duckrouting_dijkstra_near('SELECT id, source, target, cost, reverse_cost FROM edges', [15,16], [10,11,1], directed => false);
+----
+1	1	15	10	15	3	1	0
+2	2	15	10	10	-1	0	1
+
+# cap defaults to 1, so one path comes back however many pairs are offered.
+query I
+SELECT count(DISTINCT end_vid) FROM duckrouting_dijkstra_near('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10,11,1,17,16]);
+----
+1
+
+statement error
+SELECT * FROM duckrouting_dijkstra_near('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10], cap => 0);
+----
+'cap' must be at least 1
+
+# ---------------------------------------------------------------------------
+# duckrouting_dijkstra_near_cost
+# ---------------------------------------------------------------------------
+
+# pgRouting q1
+query IIR
+SELECT * FROM duckrouting_dijkstra_near_cost('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10,11,1]);
+----
+6	11	2
+
+# pgRouting q2
+query IIR
+SELECT * FROM duckrouting_dijkstra_near_cost('SELECT id, source, target, cost, reverse_cost FROM edges', [10,11,1], 6, true, cap => 2)
+ORDER BY agg_cost;
+----
+10	6	1
+11	6	2
+
+# The cost form must agree with the final agg_cost of the path form.
+query I
+SELECT count(*) FROM (
+  SELECT start_vid, end_vid, agg_cost
+  FROM duckrouting_dijkstra_near_cost('SELECT id, source, target, cost, reverse_cost FROM edges', [10,11,1], 6, true, cap => 2)
+  EXCEPT
+  SELECT start_vid, end_vid, agg_cost
+  FROM duckrouting_dijkstra_near('SELECT id, source, target, cost, reverse_cost FROM edges', [10,11,1], 6, true, cap => 2)
+  WHERE edge = -1
+);
+----
+0

@@ -35,7 +35,9 @@ wrappers is unencumbered.
 | `pgr_dijkstra` | `dijkstra_shortest_paths` / `_no_init` | `duckrouting_dijkstra` |
 | `pgr_dijkstraCost` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_cost` |
 | `pgr_dijkstraCostMatrix` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_cost_matrix` |
-| `pgr_dijkstraVia`, `pgr_dijkstraNear`, `pgr_dijkstraNearCost` | `dijkstra_shortest_paths` | not yet |
+| `pgr_dijkstraVia` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_via` |
+| `pgr_dijkstraNear` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_near` |
+| `pgr_dijkstraNearCost` | `dijkstra_shortest_paths` | `duckrouting_dijkstra_near_cost` |
 | `pgr_drivingDistance` | `dijkstra_shortest_paths` + visitor | `duckrouting_driving_distance` |
 | `pgr_withPointsDD` | `dijkstra_shortest_paths` + visitor | not yet |
 | `pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix` | `astar_search` | |
@@ -80,7 +82,8 @@ wrappers is unencumbered.
 | --- | --- |
 | `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix` | `cpp_common/bidirectional.hpp` -- own `std::priority_queue` bidirectional search |
 | `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix` | same hand-written bidirectional base, plus a heuristic |
-| `pgr_KSP`, `pgr_withPointsKSP`, `pgr_turnRestrictedPath` | `include/yen/ksp.hpp` -- own Yen's algorithm, calling the BGL-backed Dijkstra as inner solver |
+| `pgr_KSP` | `include/yen/ksp.hpp` -- own Yen's algorithm. Reimplemented independently as `duckrouting_ksp`; Boost has no k-shortest-paths routine |
+| `pgr_withPointsKSP`, `pgr_turnRestrictedPath` | Yen over the withPoints / turn-restriction graphs |
 | `pgr_trsp`, `pgr_trspVia`, `pgr_trsp_withPoints`, `pgr_trspVia_withPoints` | `trsp/trspHandler.cpp` -- own turn-restriction search. Zero `boost::` symbols |
 | `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`, `pgr_withPointsVia` | own edge-splitting graph rewrite, then delegates |
 | `pgr_edwardMoore` | own SPFA; Boost only for edge iteration |
@@ -126,6 +129,10 @@ pgRouting's q93 and q133 ask for `12 -> 7` undirected. Two paths cost exactly
 equal-cost path wins, so this is not a defect in either implementation. The
 tests assert hop count, endpoints and total cost for those cases, plus a check
 that every reported edge really connects its two reported nodes.
+
+The same thing happens in `duckrouting_ksp`: for `6 -> 17` with `k = 2`, both
+paths cost 4 and pgRouting reports them in the opposite order. The tests assert
+the *set* of node sequences and their costs, never the `path_id` ordering.
 
 ### Infinite edge costs need a sentinel (resolved)
 

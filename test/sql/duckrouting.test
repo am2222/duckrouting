@@ -26,4 +26,8 @@ GROUP BY function_name ORDER BY function_name;
 duckrouting_dijkstra	8
 duckrouting_dijkstra_cost	8
 duckrouting_dijkstra_cost_matrix	2
+duckrouting_dijkstra_near	8
+duckrouting_dijkstra_near_cost	8
+duckrouting_dijkstra_via	2
 duckrouting_driving_distance	4
+duckrouting_ksp	8
