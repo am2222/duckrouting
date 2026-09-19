@@ -102,17 +102,16 @@ wrappers is unencumbered.
 | `pgr_lineGraph`, `pgr_lineGraphFull` | own line-graph construction |  |
 | `pgr_pickDeliver`, `pgr_pickDeliverEuclidean` | own VRPPDTW heuristic, 17 source files. Zero `boost::` symbols |  |
 | `pgr_vrpOneDepot` | own legacy VRP code |  |
-| `pgr_contraction`, `pgr_deadEndContraction`, `pgr_linearContraction` | own contraction operators applied to a `boost::adjacency_list` |  |## Group 3 -- no C++; pure SQL / PL-pgSQL
+| `pgr_contraction`, `pgr_deadEndContraction`, `pgr_linearContraction` | own contraction operators applied to a `boost::adjacency_list` | `duckrouting_contraction`, `duckrouting_dead_end_contraction`, `duckrouting_linear_contraction` |## Group 3 -- no C++; pure SQL / PL-pgSQL
 
 | Function | Notes | duckrouting |
 | --- | --- | --- |
 | `pgr_extractVertices` | derives a vertex table from edges | `duckrouting_extract_vertices` |
-| `pgr_findCloseEdges` | needs PostGIS geometry predicates |  |
-| `pgr_separateCrossing` | needs PostGIS |  |
-| `pgr_separateTouching` | needs PostGIS |  |
+| `pgr_findCloseEdges` | needs PostGIS geometry predicates | `duckrouting_find_close_edges` |
+| `pgr_separateCrossing` | needs PostGIS | `duckrouting_separate_crossing` |
+| `pgr_separateTouching` | needs PostGIS | `duckrouting_separate_touching` |
 | `pgr_degree` | vertex degree over the edge table | `duckrouting_degree` |
-| `pgr_version`, `pgr_full_version` | metadata | `duckrouting_version`, `duckrouting_full_version` |
-## Tally
+| `pgr_version`, `pgr_full_version` | metadata | `duckrouting_version`, `duckrouting_full_version` |## Tally
 
 | Group | Count |
 | --- | --- |

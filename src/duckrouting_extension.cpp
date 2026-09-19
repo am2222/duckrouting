@@ -109,6 +109,12 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetWithPointsCostMatrixFunction());
 	loader.RegisterFunction(duckrouting::GetWithPointsViaFunction());
 	loader.RegisterFunction(duckrouting::GetWithPointsKspFunction());
+
+	loader.RegisterFunction(duckrouting::GetContractionFunction());
+	loader.RegisterFunction(duckrouting::GetDeadEndContractionFunction());
+	loader.RegisterFunction(duckrouting::GetLinearContractionFunction());
+
+	duckrouting::RegisterGeometryMacros(loader);
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

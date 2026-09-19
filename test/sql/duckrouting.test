@@ -44,9 +44,11 @@ duckrouting_boykov_kolmogorov	4
 duckrouting_breadth_first_search	4
 duckrouting_bridges	1
 duckrouting_connected_components	1
+duckrouting_contraction	2
 duckrouting_contraction_hierarchies	2
 duckrouting_cuthill_mckee_ordering	1
 duckrouting_dag_shortest_path	4
+duckrouting_dead_end_contraction	2
 duckrouting_degree	1
 duckrouting_depth_first_search	4
 duckrouting_dijkstra	8
@@ -73,6 +75,7 @@ duckrouting_kruskal_bfs	4
 duckrouting_kruskal_dd	2
 duckrouting_kruskal_dfs	4
 duckrouting_ksp	8
+duckrouting_linear_contraction	2
 duckrouting_make_connected	1
 duckrouting_max_cardinality_match	1
 duckrouting_max_flow	4

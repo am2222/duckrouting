@@ -344,6 +344,24 @@ std::vector<EdgeRow> SplitEdgesAtPoints(const std::vector<EdgeRow> &edges, const
 //! `details => false` means.
 std::vector<PathRow> HidePoints(const std::vector<PathRow> &rows, const std::vector<int64_t> &visible);
 
+//! Which contraction operators to apply, in order.
+enum class ContractionMethod { DeadEnd = 1, Linear = 2 };
+
+//! Simplifies the graph by absorbing dead ends and collapsing chains.
+//! `cycles` is how many times to run the chosen methods round, since each pass
+//! can expose new opportunities for the other.
+std::vector<ContractionRow> Contract(const std::vector<EdgeRow> &edges, bool directed,
+                                     const std::vector<ContractionMethod> &methods, int64_t cycles,
+                                     const std::vector<int64_t> &forbidden);
+
+//! Registers the three geometry helpers, which are SQL macros over DuckDB's
+//! spatial extension rather than C++ functions.
+void RegisterGeometryMacros(duckdb::ExtensionLoader &loader);
+
+duckdb::TableFunctionSet GetContractionFunction();
+duckdb::TableFunctionSet GetDeadEndContractionFunction();
+duckdb::TableFunctionSet GetLinearContractionFunction();
+
 duckdb::TableFunctionSet GetWithPointsFunction();
 duckdb::TableFunctionSet GetWithPointsCostFunction();
 duckdb::TableFunctionSet GetWithPointsCostMatrixFunction();

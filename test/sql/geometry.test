@@ -1,0 +1,119 @@
+# name: test/sql/geometry.test
+# description: the geometry helpers, which need DuckDB's spatial extension
+# group: [duckrouting]
+#
+# These three are pure SQL in pgRouting too -- they ask geometry questions, not
+# graph ones. duckrouting registers them as table macros, so spatial is only
+# needed when one is actually called, not when duckrouting is loaded.
+
+require duckrouting
+
+require spatial
+
+statement ok
+CREATE TABLE ge(id BIGINT, geom GEOMETRY);
+
+# Edges 1 and 2 cross at (2,2). Edge 3 starts there, touching both their
+# interiors. Edge 4 is off on its own.
+statement ok
+INSERT INTO ge VALUES
+ (1, ST_GeomFromText('LINESTRING(0 0, 4 4)')),
+ (2, ST_GeomFromText('LINESTRING(0 4, 4 0)')),
+ (3, ST_GeomFromText('LINESTRING(2 2, 2 5)')),
+ (4, ST_GeomFromText('LINESTRING(10 0, 14 0)'));
+
+statement ok
+CREATE TABLE pts(pid BIGINT, geom GEOMETRY);
+
+statement ok
+INSERT INTO pts VALUES (1, ST_Point(1.0, 1.1)), (2, ST_Point(12.0, 0.2));
+
+# ---------------------------------------------------------------------------
+# duckrouting_separate_crossing
+# ---------------------------------------------------------------------------
+
+query IIIT
+SELECT seq, id, sub_id, ST_AsText(geom) FROM duckrouting_separate_crossing('ge');
+----
+1	1	1	LINESTRING (0 0, 2 2)
+2	1	2	LINESTRING (2 2, 4 4)
+3	2	1	LINESTRING (0 4, 2 2)
+4	2	2	LINESTRING (2 2, 4 0)
+
+# Edges that cross nothing are left alone entirely.
+query I
+SELECT count(*) FROM duckrouting_separate_crossing('ge') WHERE id IN (3, 4);
+----
+0
+
+# The pieces of a split edge add back up to the original length.
+query I
+SELECT count(*) FROM (
+  SELECT s.id, sum(ST_Length(s.geom)) AS pieces, max(ST_Length(e.geom)) AS whole
+  FROM duckrouting_separate_crossing('ge') s JOIN ge e USING (id)
+  GROUP BY s.id
+) WHERE abs(pieces - whole) > 1e-9;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_separate_touching
+# ---------------------------------------------------------------------------
+# Edge 3's start point sits on the interior of both edge 1 and edge 2, so both
+# get split there even though edge 3 itself is untouched.
+
+query IIIT
+SELECT seq, id, sub_id, ST_AsText(geom) FROM duckrouting_separate_touching('ge');
+----
+1	1	1	LINESTRING (0 0, 2 2)
+2	1	2	LINESTRING (2 2, 4 4)
+3	2	1	LINESTRING (0 4, 2 2)
+4	2	2	LINESTRING (2 2, 4 0)
+
+query I
+SELECT count(*) FROM duckrouting_separate_touching('ge') WHERE id IN (3, 4);
+----
+0
+
+# A larger tolerance must not lose any geometry.
+query I
+SELECT count(*) FROM (
+  SELECT s.id, sum(ST_Length(s.geom)) AS pieces, max(ST_Length(e.geom)) AS whole
+  FROM duckrouting_separate_touching('ge', tolerance => 0.5) s JOIN ge e USING (id)
+  GROUP BY s.id
+) WHERE abs(pieces - whole) > 1e-9;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_find_close_edges
+# ---------------------------------------------------------------------------
+# Point 1 lies just off edge 1; point 2 just off edge 4, halfway along it.
+
+query IIIRR
+SELECT seq, pid, edge_id, round(fraction, 4), round(distance, 4)
+FROM duckrouting_find_close_edges('ge', 'pts', tolerance => 1.0);
+----
+1	1	1	0.2625	0.0707
+2	2	4	0.5	0.2
+
+# cap asks for more than the single nearest edge.
+query I
+SELECT count(*) FROM duckrouting_find_close_edges('ge', 'pts', tolerance => 2.0, cap => 2) WHERE pid = 1;
+----
+2
+
+# Nothing within tolerance means no rows, rather than an error.
+query I
+SELECT count(*) FROM duckrouting_find_close_edges('ge', 'pts', tolerance => 0.001);
+----
+0
+
+# The fraction it reports is the one the withPoints family expects, so the
+# closest point really lies that far along the edge.
+query I
+SELECT count(*) FROM duckrouting_find_close_edges('ge', 'pts', tolerance => 1.0) f
+JOIN ge e ON e.id = f.edge_id
+WHERE ST_Distance(ST_LineInterpolatePoint(e.geom, f.fraction), f.geom) > 1e-9;
+----
+0

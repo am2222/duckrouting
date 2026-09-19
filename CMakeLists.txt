@@ -35,7 +35,9 @@ set(EXTENSION_SOURCES
     src/with_points.cpp
     src/bidirectional.cpp
     src/utilities.cpp
-    src/with_points_family.cpp)
+    src/with_points_family.cpp
+    src/contract_ops.cpp
+    src/geometry.cpp)
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
