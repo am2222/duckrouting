@@ -52,6 +52,38 @@ std::vector<IdentifierRow> Bridges(const std::vector<EdgeRow> &edges);
 //! The vertex pairs Boost would join to make the graph connected.
 std::vector<PairRow> MakeConnected(const std::vector<EdgeRow> &edges);
 
+//! One edge of a minimum spanning forest.
+struct SpanningEdgeRow {
+	int64_t edge;
+	double cost;
+};
+
+//! How the spanning tree is walked once it has been built.
+enum class Traversal {
+	Bfs,       //!< breadth first; depth is non-decreasing
+	DfsDepth,  //!< depth first, cut off by hop count
+	DfsCost    //!< depth first, cut off by accumulated cost (the DD variants)
+};
+
+//! Minimum spanning forest of the undirected graph, by edge id.
+std::vector<SpanningEdgeRow> Kruskal(const std::vector<EdgeRow> &edges);
+std::vector<SpanningEdgeRow> Prim(const std::vector<EdgeRow> &edges);
+
+//! Walks the spanning forest from each root. `limit` is a maximum depth for
+//! Bfs/DfsDepth and a maximum accumulated cost for DfsCost.
+std::vector<DrivingDistanceRow> SpanningTraversal(const std::vector<EdgeRow> &edges, bool use_prim,
+                                                  const std::vector<int64_t> &roots, Traversal traversal,
+                                                  double limit);
+
+duckdb::TableFunctionSet GetKruskalFunction();
+duckdb::TableFunctionSet GetPrimFunction();
+duckdb::TableFunctionSet GetKruskalBFSFunction();
+duckdb::TableFunctionSet GetKruskalDFSFunction();
+duckdb::TableFunctionSet GetKruskalDDFunction();
+duckdb::TableFunctionSet GetPrimBFSFunction();
+duckdb::TableFunctionSet GetPrimDFSFunction();
+duckdb::TableFunctionSet GetPrimDDFunction();
+
 duckdb::TableFunctionSet GetFloydWarshallFunction();
 duckdb::TableFunctionSet GetJohnsonFunction();
 duckdb::TableFunctionSet GetConnectedComponentsFunction();

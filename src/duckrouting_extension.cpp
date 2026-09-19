@@ -42,6 +42,15 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetArticulationPointsFunction());
 	loader.RegisterFunction(duckrouting::GetBridgesFunction());
 	loader.RegisterFunction(duckrouting::GetMakeConnectedFunction());
+
+	loader.RegisterFunction(duckrouting::GetKruskalFunction());
+	loader.RegisterFunction(duckrouting::GetPrimFunction());
+	loader.RegisterFunction(duckrouting::GetKruskalBFSFunction());
+	loader.RegisterFunction(duckrouting::GetKruskalDFSFunction());
+	loader.RegisterFunction(duckrouting::GetKruskalDDFunction());
+	loader.RegisterFunction(duckrouting::GetPrimBFSFunction());
+	loader.RegisterFunction(duckrouting::GetPrimDFSFunction());
+	loader.RegisterFunction(duckrouting::GetPrimDDFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

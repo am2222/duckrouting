@@ -34,7 +34,8 @@ export default defineConfig({
           { text: 'Dijkstra family', link: '/functions/dijkstra' },
           { text: 'K shortest paths', link: '/functions/ksp' },
           { text: 'All pairs', link: '/functions/all-pairs' },
-          { text: 'Components', link: '/functions/components' }
+          { text: 'Components', link: '/functions/components' },
+          { text: 'Spanning trees', link: '/functions/spanning-trees' }
         ]
       },
       {

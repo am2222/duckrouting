@@ -51,8 +51,10 @@ wrappers is unencumbered.
 | `pgr_articulationPoints` | `articulation_points` | `duckrouting_articulation_points` |
 | `pgr_bridges` | single-edge `biconnected_components` | `duckrouting_bridges` |
 | `pgr_makeConnected` | `make_connected` | `duckrouting_make_connected` |
-| `pgr_kruskal`, `pgr_kruskalBFS`, `pgr_kruskalDD`, `pgr_kruskalDFS` | `kruskal_minimum_spanning_tree` | |
-| `pgr_prim`, `pgr_primBFS`, `pgr_primDD`, `pgr_primDFS` | `prim_minimum_spanning_tree` | |
+| `pgr_kruskal` | `kruskal_minimum_spanning_tree` | `duckrouting_kruskal` |
+| `pgr_kruskalBFS`, `pgr_kruskalDFS`, `pgr_kruskalDD` | `kruskal_minimum_spanning_tree` + traversal | `duckrouting_kruskal_bfs` / `_dfs` / `_dd` |
+| `pgr_prim` | `prim_minimum_spanning_tree` | `duckrouting_prim` |
+| `pgr_primBFS`, `pgr_primDFS`, `pgr_primDD` | `prim_minimum_spanning_tree` + traversal | `duckrouting_prim_bfs` / `_dfs` / `_dd` |
 | `pgr_breadthFirstSearch` | `breadth_first_search` | |
 | `pgr_depthFirstSearch` | `depth_first_search` / `undirected_dfs` | |
 | `pgr_maxFlow`, `pgr_pushRelabel` | `push_relabel_max_flow` | |
@@ -131,6 +133,14 @@ pgRouting's q93 and q133 ask for `12 -> 7` undirected. Two paths cost exactly
 equal-cost path wins, so this is not a defect in either implementation. The
 tests assert hop count, endpoints and total cost for those cases, plus a check
 that every reported edge really connects its two reported nodes.
+
+The spanning-tree family has the strongest form of this: every edge in the
+sample graph costs 1, so the minimum spanning tree is massively non-unique --
+pgRouting's own `pgr_kruskal` and `pgr_prim` return different edge sets from
+each other on the same graph. The tests assert what any MST must satisfy (edge
+count, total weight, connectivity preserved) rather than a fixed edge set.
+`duckrouting_prim_dd` does happen to reproduce pgRouting's output exactly, and
+is pinned.
 
 `duckrouting_make_connected` differs the same way: joining n components takes
 n-1 edges, but *which* vertex stands for each component is Boost's choice and

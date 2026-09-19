@@ -1,0 +1,217 @@
+# name: test/sql/spanning.test
+# description: kruskal / prim spanning forests and their traversals vs pgRouting
+# group: [duckrouting]
+#
+# Expected results from pgRouting docqueries/spanningTree/.
+#
+# KNOWN TIE throughout this file: every edge in the sample graph costs 1, so the
+# minimum spanning tree is massively non-unique -- pgRouting's own kruskal and
+# prim return different edge sets from each other on the same graph. Where the
+# choice is a genuine tie the tests assert the invariants that must hold of any
+# MST (edge count, total cost, connectivity preserved) rather than a specific
+# edge set. Where our answer does coincide with pgRouting's it is pinned exactly.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# ---------------------------------------------------------------------------
+# duckrouting_kruskal
+# ---------------------------------------------------------------------------
+
+# pgRouting q1 returns 14 edges totalling 14. A spanning forest over 17 vertices
+# in 3 components must have exactly 17 - 3 = 14 edges.
+query IR
+SELECT count(*), sum(cost) FROM duckrouting_kruskal('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id');
+----
+14	14
+
+# Every chosen edge must exist in the input.
+query I
+SELECT count(*) FROM duckrouting_kruskal('SELECT id, source, target, cost, reverse_cost FROM edges') k
+WHERE NOT EXISTS (SELECT 1 FROM edges e WHERE e.id = k.edge);
+----
+0
+
+# No edge may be chosen twice.
+query I
+SELECT count(*) FROM (
+  SELECT edge FROM duckrouting_kruskal('SELECT id, source, target, cost, reverse_cost FROM edges')
+  GROUP BY edge HAVING count(*) > 1
+);
+----
+0
+
+# The forest must span the same components as the full graph: feeding the chosen
+# edges back in reproduces the original component structure.
+query II
+SELECT component, count(*) FROM duckrouting_connected_components(
+  'SELECT e.id, e.source, e.target, e.cost, e.reverse_cost FROM edges e
+   JOIN duckrouting_kruskal(''SELECT id, source, target, cost, reverse_cost FROM edges'') k ON k.edge = e.id')
+GROUP BY component ORDER BY component;
+----
+1	13
+2	2
+13	2
+
+# ---------------------------------------------------------------------------
+# duckrouting_prim
+# ---------------------------------------------------------------------------
+
+# pgRouting q1: the first 13 edges give an 11-edge forest totalling 11.
+query IR
+SELECT count(*), sum(cost) FROM duckrouting_prim('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 14');
+----
+11	11
+
+# Kruskal and Prim may pick different edges, but a minimum spanning forest has a
+# determined size and total weight, so those must agree.
+query I
+SELECT count(*) FROM (
+  SELECT count(*) AS n, sum(cost) AS total FROM duckrouting_prim('SELECT id, source, target, cost, reverse_cost FROM edges')
+  EXCEPT
+  SELECT count(*) AS n, sum(cost) AS total FROM duckrouting_kruskal('SELECT id, source, target, cost, reverse_cost FROM edges')
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_prim_dd -- this one does reproduce pgRouting exactly
+# ---------------------------------------------------------------------------
+
+# pgRouting q1: root 6, distance 3.5. Depth-first order, so depth rises and
+# falls as the walk descends and backtracks.
+query IIIIIRR
+SELECT seq, depth, pred, node, edge, cost, agg_cost
+FROM duckrouting_prim_dd('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6, 3.5);
+----
+1	0	6	6	-1	0	0
+2	1	6	5	1	1	1
+3	1	6	10	2	1	1
+4	2	10	15	3	1	2
+5	2	10	11	5	1	2
+6	3	11	16	9	1	3
+7	3	11	12	11	1	3
+8	1	6	7	4	1	1
+9	2	7	3	7	1	2
+10	3	3	1	6	1	3
+11	2	7	8	10	1	2
+12	3	8	9	14	1	3
+
+# The distance cutoff really bites.
+query I
+SELECT count(*) FROM duckrouting_prim_dd('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6, 1.0);
+----
+4
+
+query I
+SELECT count(*) FROM duckrouting_prim_dd('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6, 0.0);
+----
+1
+
+# No row may exceed the requested distance.
+query I
+SELECT count(*) FROM duckrouting_prim_dd('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6, 2.0)
+WHERE agg_cost > 2.0;
+----
+0
+
+# ---------------------------------------------------------------------------
+# Traversal invariants: BFS vs DFS
+# ---------------------------------------------------------------------------
+
+# Breadth first means depth never decreases as seq advances.
+query I
+SELECT count(*) FROM (
+  SELECT depth, lag(depth) OVER (ORDER BY seq) AS previous
+  FROM duckrouting_kruskal_bfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6)
+) WHERE previous IS NOT NULL AND depth < previous;
+----
+0
+
+# Depth first does backtrack, so it must NOT be monotonic here.
+query I
+SELECT count(*) > 0 FROM (
+  SELECT depth, lag(depth) OVER (ORDER BY seq) AS previous
+  FROM duckrouting_prim_dfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6)
+) WHERE previous IS NOT NULL AND depth < previous;
+----
+true
+
+# BFS and DFS visit the same set of nodes; only the order differs.
+query I
+SELECT count(*) FROM (
+  SELECT node FROM duckrouting_prim_bfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6)
+  EXCEPT
+  SELECT node FROM duckrouting_prim_dfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6)
+);
+----
+0
+
+# The root is always depth 0, its own predecessor, edge -1, cost 0.
+query IIIRR
+SELECT depth, start_vid, pred, cost, agg_cost
+FROM duckrouting_kruskal_bfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6)
+WHERE node = 6;
+----
+0	6	6	0	0
+
+# Each node is reported once per root.
+query I
+SELECT count(*) FROM (
+  SELECT node FROM duckrouting_kruskal_bfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6)
+  GROUP BY node HAVING count(*) > 1
+);
+----
+0
+
+# Every non-root edge reported must belong to the spanning forest.
+query I
+SELECT count(*) FROM duckrouting_kruskal_bfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6) t
+WHERE t.edge <> -1
+  AND NOT EXISTS (SELECT 1 FROM duckrouting_kruskal('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id') k WHERE k.edge = t.edge);
+----
+0
+
+# A traversal only reaches the root's own component, so 13 of the 17 vertices.
+query I
+SELECT count(*) FROM duckrouting_kruskal_bfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6);
+----
+13
+
+# max_depth truncates the walk.
+query I
+SELECT count(*) FROM duckrouting_prim_bfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6, 1);
+----
+4
+
+query I
+SELECT max(depth) FROM duckrouting_prim_bfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6, max_depth => 2);
+----
+2
+
+# Several roots may be walked in one call, each rooted separately.
+query II
+SELECT start_vid, count(*) FROM duckrouting_prim_bfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', [6, 13])
+GROUP BY start_vid ORDER BY start_vid;
+----
+6	13
+13	2
+
+# A root outside the graph still yields its own single row, as in pgRouting.
+query IIII
+SELECT depth, start_vid, pred, edge FROM duckrouting_prim_bfs('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 9999);
+----
+0	9999	9999	-1
+
+statement error
+SELECT * FROM duckrouting_prim_bfs('SELECT id, source, target, cost, reverse_cost FROM edges', 6, max_depth => -1);
+----
+'max_depth' must not be negative

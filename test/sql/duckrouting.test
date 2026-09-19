@@ -36,6 +36,14 @@ duckrouting_dijkstra_via	4
 duckrouting_driving_distance	4
 duckrouting_floyd_warshall	2
 duckrouting_johnson	2
+duckrouting_kruskal	1
+duckrouting_kruskal_bfs	4
+duckrouting_kruskal_dd	2
+duckrouting_kruskal_dfs	4
 duckrouting_ksp	8
 duckrouting_make_connected	1
+duckrouting_prim	1
+duckrouting_prim_bfs	4
+duckrouting_prim_dd	2
+duckrouting_prim_dfs	4
 duckrouting_strong_components	1
