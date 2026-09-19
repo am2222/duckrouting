@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img"
+     aria-label="duckrouting">
+  <title>duckrouting</title>
+  <desc>A duck riding the first edge of a highlighted shortest path through a small graph.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#121a2b"/>
+      <stop offset="100%" stop-color="#1d2740"/>
+    </linearGradient>
+    <linearGradient id="path" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffd233"/>
+      <stop offset="100%" stop-color="#fff35c"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="58" fill="url(#bg)"/>
+
+  <!-- Drawn at natural coordinates; the transform is computed to centre and
+       fit the whole composition in the tile. -->
+  <g id="art" transform="translate(1.21 -30.48) scale(0.9533)">
+    <!-- Edges not on the route -->
+    <g stroke="#3b4a72" stroke-width="9" stroke-linecap="round" fill="none">
+      <path d="M46 206 L112 226"/>
+      <path d="M112 226 L172 178"/>
+      <path d="M46 206 L172 178"/>
+    </g>
+
+    <!-- The route. The first edge is long enough to carry the duck without
+         crowding the vertex at either end. -->
+    <polyline points="46,206 134,138 172,178 220,112"
+              fill="none" stroke="url(#path)" stroke-width="17"
+              stroke-linecap="round" stroke-linejoin="round"/>
+
+    <circle cx="112" cy="226" r="11" fill="#1d2740" stroke="#4d5d88" stroke-width="7"/>
+
+    <g fill="#ffd233" stroke="#121a2b" stroke-width="6">
+      <circle cx="46" cy="206" r="17"/>
+      <circle cx="134" cy="138" r="12"/>
+      <circle cx="172" cy="178" r="12"/>
+      <circle cx="220" cy="112" r="17"/>
+    </g>
+
+    <!-- The duck, tilted to the first edge's own heading. Cream rather than
+         yellow: on top of a yellow edge, a yellow duck is just a lump. -->
+    <g transform="translate(85.3 170.9) rotate(-37.7) scale(0.85) translate(-32 -30)" stroke="#121a2b" stroke-width="6" stroke-linejoin="round">
+      <path d="M16 22 L-4 9 L11 36 Z" fill="#fdf6e3"/>
+      <path d="M10 38 C9 25 20 17 33 17 C47 17 55 26 55 34 C55 42 45 48 31 48 C19 48 12 45 10 38 Z" fill="#fdf6e3"/>
+      <circle cx="46" cy="14" r="12.5" fill="#fdf6e3"/>
+      <path d="M57 12 L72 16.5 L57 22 Z" fill="#ff9f1c"/>
+      <path d="M24 31 C30 26 40 27 44 33 C40 39 30 40 24 35 Z" fill="#e6d9b8" stroke="none"/>
+      <circle cx="51" cy="10" r="2.6" fill="#121a2b" stroke="none"/>
+    </g>
+  </g>
+</svg>

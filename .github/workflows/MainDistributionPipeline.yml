@@ -2,8 +2,12 @@
 # This workflow calls the main distribution pipeline from DuckDB to build, test and (optionally) release the extension
 #
 name: Main Extension Distribution Pipeline
+# A push to a PR branch would otherwise fire this twice -- once for `push` and
+# once for `pull_request` -- doubling a matrix that is already 21 jobs. Branch
+# work is covered by the PR run; `main` still gets a direct run after merge.
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
