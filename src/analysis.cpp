@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckrouting/graph.hpp"
 
@@ -403,7 +404,7 @@ void ReadEdges(TableFunctionBindInput &input, AnalysisBindData &bind_data) {
 	}
 	bind_data.edges_sql = input.inputs[0].GetValue<std::string>();
 	for (auto &parameter : input.named_parameters) {
-		if (duckdb::StringUtil::CIEquals(parameter.first, "directed")) {
+		if (NameMatches(parameter.first, "directed")) {
 			if (parameter.second.IsNull()) {
 				throw BinderException("duckrouting: 'directed' must not be NULL");
 			}
@@ -415,8 +416,7 @@ void ReadEdges(TableFunctionBindInput &input, AnalysisBindData &bind_data) {
 //! Two BIGINT columns, used by the colouring functions and the dominator tree.
 template <const char *First, const char *Second>
 duckdb::unique_ptr<FunctionData> PairBind(ClientContext &, TableFunctionBindInput &input,
-                                          duckdb::vector<LogicalType> &return_types,
-                                          duckdb::vector<std::string> &names) {
+                                          duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<AnalysisBindData>();
 	ReadEdges(input, *bind_data);
 	if (input.inputs.size() > 1) {
@@ -474,8 +474,7 @@ void DominatorScan(ClientContext &, TableFunctionInput &data, DataChunk &output)
 //! Single-value answers: is_planar and bandwidth.
 template <bool IsBoolean>
 duckdb::unique_ptr<FunctionData> ScalarBind(ClientContext &, TableFunctionBindInput &input,
-                                            duckdb::vector<LogicalType> &return_types,
-                                            duckdb::vector<std::string> &names) {
+                                            duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<AnalysisBindData>();
 	ReadEdges(input, *bind_data);
 	names = {IsBoolean ? "is_planar" : "bandwidth"};
@@ -504,8 +503,7 @@ void ScalarScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 
 //! (vid, centrality)
 duckdb::unique_ptr<FunctionData> CentralityBind(ClientContext &, TableFunctionBindInput &input,
-                                                duckdb::vector<LogicalType> &return_types,
-                                                duckdb::vector<std::string> &names) {
+                                                duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<AnalysisBindData>();
 	ReadEdges(input, *bind_data);
 	if (input.inputs.size() > 1 && !input.inputs[1].IsNull()) {
@@ -537,8 +535,7 @@ void CentralityScan(ClientContext &, TableFunctionInput &data, DataChunk &output
 
 //! (seq, edge, cost, mincut)
 duckdb::unique_ptr<FunctionData> MinCutBind(ClientContext &, TableFunctionBindInput &input,
-                                            duckdb::vector<LogicalType> &return_types,
-                                            duckdb::vector<std::string> &names) {
+                                            duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<AnalysisBindData>();
 	ReadEdges(input, *bind_data);
 	names = {"seq", "edge", "cost", "mincut"};
@@ -569,8 +566,7 @@ void MinCutScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 
 //! (seq, path_id, path_seq, start_vid, end_vid, node, edge, cost, agg_cost)
 duckdb::unique_ptr<FunctionData> CircuitBind(ClientContext &, TableFunctionBindInput &input,
-                                             duckdb::vector<LogicalType> &return_types,
-                                             duckdb::vector<std::string> &names) {
+                                             duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<AnalysisBindData>();
 	ReadEdges(input, *bind_data);
 	names = {"seq", "path_id", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
@@ -608,8 +604,7 @@ void CircuitScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 
 //! (source, target) -- the planar embedding.
 duckdb::unique_ptr<FunctionData> EmbeddingBind(ClientContext &, TableFunctionBindInput &input,
-                                               duckdb::vector<LogicalType> &return_types,
-                                               duckdb::vector<std::string> &names) {
+                                               duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<AnalysisBindData>();
 	ReadEdges(input, *bind_data);
 	names = {"seq", "source", "target"};

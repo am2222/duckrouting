@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckrouting/graph.hpp"
 
@@ -320,7 +321,7 @@ std::vector<int64_t> VertexIds(const Value &value, const char *what) {
 
 bool NamedBool(TableFunctionBindInput &input, const char *name, bool fallback) {
 	for (auto &parameter : input.named_parameters) {
-		if (duckdb::StringUtil::CIEquals(parameter.first, name)) {
+		if (NameMatches(parameter.first, name)) {
 			if (parameter.second.IsNull()) {
 				throw BinderException("duckrouting: '%s' must not be NULL", name);
 			}
@@ -332,8 +333,7 @@ bool NamedBool(TableFunctionBindInput &input, const char *name, bool fallback) {
 
 template <Traversal Mode>
 duckdb::unique_ptr<FunctionData> SearchBind(ClientContext &, TableFunctionBindInput &input,
-                                            duckdb::vector<LogicalType> &return_types,
-                                            duckdb::vector<std::string> &names) {
+                                            duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -345,7 +345,7 @@ duckdb::unique_ptr<FunctionData> SearchBind(ClientContext &, TableFunctionBindIn
 	                       ? static_cast<double>(input.inputs[2].GetValue<int64_t>())
 	                       : static_cast<double>(std::numeric_limits<int64_t>::max());
 	for (auto &parameter : input.named_parameters) {
-		if (duckdb::StringUtil::CIEquals(parameter.first, "max_depth")) {
+		if (NameMatches(parameter.first, "max_depth")) {
 			if (parameter.second.IsNull()) {
 				throw BinderException("duckrouting: 'max_depth' must not be NULL");
 			}
@@ -392,8 +392,7 @@ void SearchScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 //! bellmanFord and dagShortestPath share pgRouting's dijkstra column shape.
 template <bool IsDag>
 duckdb::unique_ptr<FunctionData> PathBind(ClientContext &, TableFunctionBindInput &input,
-                                          duckdb::vector<LogicalType> &return_types,
-                                          duckdb::vector<std::string> &names) {
+                                          duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}

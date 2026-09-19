@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckrouting/graph.hpp"
 #include "duckrouting/yen.hpp"
@@ -359,8 +360,7 @@ std::vector<int64_t> IdList(const Value &value, const char *what) {
 
 //! (type, id, contracted_vertices, source, target, cost, metric, vertex_order)
 duckdb::unique_ptr<FunctionData> ContractionBind(ClientContext &, TableFunctionBindInput &input,
-                                                 duckdb::vector<LogicalType> &return_types,
-                                                 duckdb::vector<std::string> &names) {
+                                                 duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -373,9 +373,9 @@ duckdb::unique_ptr<FunctionData> ContractionBind(ClientContext &, TableFunctionB
 		if (parameter.second.IsNull()) {
 			throw BinderException("duckrouting: '%s' must not be NULL", parameter.first.c_str());
 		}
-		if (duckdb::StringUtil::CIEquals(parameter.first, "directed")) {
+		if (NameMatches(parameter.first, "directed")) {
 			bind_data->directed = parameter.second.GetValue<bool>();
-		} else if (duckdb::StringUtil::CIEquals(parameter.first, "forbidden")) {
+		} else if (NameMatches(parameter.first, "forbidden")) {
 			bind_data->forbidden = IdList(parameter.second, "'forbidden'");
 		}
 	}
@@ -419,8 +419,7 @@ void ContractionScan(ClientContext &, TableFunctionInput &data, DataChunk &outpu
 
 //! withPointsDD shares drivingDistance's column shape.
 duckdb::unique_ptr<FunctionData> WithPointsBind(ClientContext &, TableFunctionBindInput &input,
-                                                duckdb::vector<LogicalType> &return_types,
-                                                duckdb::vector<std::string> &names) {
+                                                duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull() || input.inputs[1].IsNull()) {
 		throw BinderException("duckrouting: the edges and points queries must not be NULL");
 	}
@@ -440,11 +439,11 @@ duckdb::unique_ptr<FunctionData> WithPointsBind(ClientContext &, TableFunctionBi
 		if (parameter.second.IsNull()) {
 			throw BinderException("duckrouting: '%s' must not be NULL", parameter.first.c_str());
 		}
-		if (duckdb::StringUtil::CIEquals(parameter.first, "directed")) {
+		if (NameMatches(parameter.first, "directed")) {
 			bind_data->directed = parameter.second.GetValue<bool>();
-		} else if (duckdb::StringUtil::CIEquals(parameter.first, "details")) {
+		} else if (NameMatches(parameter.first, "details")) {
 			bind_data->details = parameter.second.GetValue<bool>();
-		} else if (duckdb::StringUtil::CIEquals(parameter.first, "driving_side")) {
+		} else if (NameMatches(parameter.first, "driving_side")) {
 			const std::string side = parameter.second.GetValue<std::string>();
 			bind_data->driving_side = side.empty() ? 'b' : static_cast<char>(std::tolower(side[0]));
 		}

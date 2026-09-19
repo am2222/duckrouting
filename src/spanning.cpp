@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckrouting/graph.hpp"
 #include "duckrouting/yen.hpp"
@@ -228,8 +229,7 @@ std::vector<int64_t> RootIds(const Value &value) {
 
 //! (edge, cost) -- kruskal and prim.
 duckdb::unique_ptr<FunctionData> ForestBind(ClientContext &, TableFunctionBindInput &input,
-                                            duckdb::vector<LogicalType> &return_types,
-                                            duckdb::vector<std::string> &names) {
+                                            duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -264,8 +264,7 @@ void ForestScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 //! The traversal variants all share pgRouting's drivingDistance column shape.
 template <bool UsePrim, Traversal Mode>
 duckdb::unique_ptr<FunctionData> TraversalBind(ClientContext &, TableFunctionBindInput &input,
-                                               duckdb::vector<LogicalType> &return_types,
-                                               duckdb::vector<std::string> &names) {
+                                               duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -286,7 +285,7 @@ duckdb::unique_ptr<FunctionData> TraversalBind(ClientContext &, TableFunctionBin
 		                       ? static_cast<double>(input.inputs[2].GetValue<int64_t>())
 		                       : static_cast<double>(std::numeric_limits<int64_t>::max());
 		for (auto &parameter : input.named_parameters) {
-			if (duckdb::StringUtil::CIEquals(parameter.first, "max_depth")) {
+			if (NameMatches(parameter.first, "max_depth")) {
 				if (parameter.second.IsNull()) {
 					throw BinderException("duckrouting: 'max_depth' must not be NULL");
 				}

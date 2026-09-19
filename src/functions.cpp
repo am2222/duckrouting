@@ -1,4 +1,5 @@
 #include "duckrouting/dijkstra.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -43,7 +44,7 @@ std::vector<int64_t> ToVertexIds(const Value &value, const char *what) {
 
 bool NamedFlag(TableFunctionBindInput &input, const char *name, bool fallback) {
 	for (auto &parameter : input.named_parameters) {
-		if (duckdb::StringUtil::CIEquals(parameter.first, name)) {
+		if (NameMatches(parameter.first, name)) {
 			if (parameter.second.IsNull()) {
 				throw BinderException("duckrouting: '%s' must not be NULL", name);
 			}
@@ -55,7 +56,7 @@ bool NamedFlag(TableFunctionBindInput &input, const char *name, bool fallback) {
 
 int64_t NamedInt(TableFunctionBindInput &input, const char *name, int64_t fallback) {
 	for (auto &parameter : input.named_parameters) {
-		if (duckdb::StringUtil::CIEquals(parameter.first, name)) {
+		if (NameMatches(parameter.first, name)) {
 			if (parameter.second.IsNull()) {
 				throw BinderException("duckrouting: '%s' must not be NULL", name);
 			}
@@ -103,8 +104,7 @@ void RequireNonNull(TableFunctionBindInput &input) {
 // --- dijkstra ---------------------------------------------------------------
 
 duckdb::unique_ptr<FunctionData> DijkstraBind(ClientContext &, TableFunctionBindInput &input,
-                                              duckdb::vector<LogicalType> &return_types,
-                                              duckdb::vector<std::string> &names) {
+                                              duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	RequireNonNull(input);
 	auto bind_data = duckdb::make_uniq<RoutingBindData>();
 	bind_data->edges_sql = input.inputs[0].GetValue<std::string>();
@@ -148,8 +148,7 @@ void DijkstraScan(ClientContext &, TableFunctionInput &data, DataChunk &output) 
 // --- dijkstra_cost / dijkstra_cost_matrix -----------------------------------
 
 duckdb::unique_ptr<FunctionData> CostBind(ClientContext &, TableFunctionBindInput &input,
-                                          duckdb::vector<LogicalType> &return_types,
-                                          duckdb::vector<std::string> &names) {
+                                          duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	RequireNonNull(input);
 	auto bind_data = duckdb::make_uniq<RoutingBindData>();
 	bind_data->edges_sql = input.inputs[0].GetValue<std::string>();
@@ -165,8 +164,7 @@ duckdb::unique_ptr<FunctionData> CostBind(ClientContext &, TableFunctionBindInpu
 
 //! The matrix form takes one vertex list and routes it against itself.
 duckdb::unique_ptr<FunctionData> CostMatrixBind(ClientContext &, TableFunctionBindInput &input,
-                                                duckdb::vector<LogicalType> &return_types,
-                                                duckdb::vector<std::string> &names) {
+                                                duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	RequireNonNull(input);
 	auto bind_data = duckdb::make_uniq<RoutingBindData>();
 	bind_data->edges_sql = input.inputs[0].GetValue<std::string>();
@@ -204,8 +202,7 @@ void CostScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 // --- driving_distance -------------------------------------------------------
 
 duckdb::unique_ptr<FunctionData> DrivingDistanceBind(ClientContext &, TableFunctionBindInput &input,
-                                                     duckdb::vector<LogicalType> &return_types,
-                                                     duckdb::vector<std::string> &names) {
+                                                     duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	RequireNonNull(input);
 	auto bind_data = duckdb::make_uniq<RoutingBindData>();
 	bind_data->edges_sql = input.inputs[0].GetValue<std::string>();
@@ -251,8 +248,7 @@ void DrivingDistanceScan(ClientContext &, TableFunctionInput &data, DataChunk &o
 // --- dijkstra_via -----------------------------------------------------------
 
 duckdb::unique_ptr<FunctionData> ViaBind(ClientContext &, TableFunctionBindInput &input,
-                                         duckdb::vector<LogicalType> &return_types,
-                                         duckdb::vector<std::string> &names) {
+                                         duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	RequireNonNull(input);
 	auto bind_data = duckdb::make_uniq<RoutingBindData>();
 	bind_data->edges_sql = input.inputs[0].GetValue<std::string>();
@@ -316,8 +312,7 @@ duckdb::unique_ptr<FunctionData> NearBindCommon(TableFunctionBindInput &input, R
 }
 
 duckdb::unique_ptr<FunctionData> NearBind(ClientContext &, TableFunctionBindInput &input,
-                                          duckdb::vector<LogicalType> &return_types,
-                                          duckdb::vector<std::string> &names) {
+                                          duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<RoutingBindData>();
 	NearBindCommon(input, *bind_data);
 	names = {"seq", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
@@ -335,8 +330,7 @@ duckdb::unique_ptr<GlobalTableFunctionState> NearInit(ClientContext &context, Ta
 }
 
 duckdb::unique_ptr<FunctionData> NearCostBind(ClientContext &, TableFunctionBindInput &input,
-                                              duckdb::vector<LogicalType> &return_types,
-                                              duckdb::vector<std::string> &names) {
+                                              duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<RoutingBindData>();
 	NearBindCommon(input, *bind_data);
 	names = {"start_vid", "end_vid", "agg_cost"};
@@ -355,8 +349,7 @@ duckdb::unique_ptr<GlobalTableFunctionState> NearCostInit(ClientContext &context
 // --- ksp --------------------------------------------------------------------
 
 duckdb::unique_ptr<FunctionData> KspBind(ClientContext &, TableFunctionBindInput &input,
-                                         duckdb::vector<LogicalType> &return_types,
-                                         duckdb::vector<std::string> &names) {
+                                         duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	RequireNonNull(input);
 	auto bind_data = duckdb::make_uniq<RoutingBindData>();
 	bind_data->edges_sql = input.inputs[0].GetValue<std::string>();

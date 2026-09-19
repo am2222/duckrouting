@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckrouting/graph.hpp"
 
@@ -211,8 +212,7 @@ struct TspGlobalState : public GlobalTableFunctionState {
 };
 
 duckdb::unique_ptr<FunctionData> TspBind(ClientContext &, TableFunctionBindInput &input,
-                                         duckdb::vector<LogicalType> &return_types,
-                                         duckdb::vector<std::string> &names) {
+                                         duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the query must not be NULL");
 	}
@@ -228,9 +228,9 @@ duckdb::unique_ptr<FunctionData> TspBind(ClientContext &, TableFunctionBindInput
 		if (parameter.second.IsNull()) {
 			throw BinderException("duckrouting: '%s' must not be NULL", parameter.first.c_str());
 		}
-		if (duckdb::StringUtil::CIEquals(parameter.first, "start_id")) {
+		if (NameMatches(parameter.first, "start_id")) {
 			bind_data->start_id = parameter.second.GetValue<int64_t>();
-		} else if (duckdb::StringUtil::CIEquals(parameter.first, "end_id")) {
+		} else if (NameMatches(parameter.first, "end_id")) {
 			bind_data->end_id = parameter.second.GetValue<int64_t>();
 		}
 	}

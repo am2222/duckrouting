@@ -1,4 +1,5 @@
 #include "duckrouting/edges.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/connection.hpp"
@@ -21,14 +22,11 @@ using duckdb::string;
 namespace {
 
 //! Case-insensitive membership test over the column names of `edges_sql`.
-//! Templated on the container because PreparedStatement::GetNames() does not
-//! return the same type across DuckDB versions -- v1.5 hands back a
-//! `duckdb::vector<string>` reference, v2 something else. Deducing it keeps
-//! this working either way.
+//! Templated on the container for the same reason.
 template <typename Names>
 bool HasColumn(const Names &names, const char *wanted) {
 	for (auto it = names.begin(); it != names.end(); ++it) {
-		if (duckdb::StringUtil::CIEquals(*it, wanted)) {
+		if (NameMatches(*it, wanted)) {
 			return true;
 		}
 	}

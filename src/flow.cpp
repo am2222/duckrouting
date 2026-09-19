@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/compat.hpp"
 
 #include "duckrouting/graph.hpp"
 
@@ -482,7 +483,7 @@ void ReadFlowArguments(TableFunctionBindInput &input, FlowBindData &bind_data) {
 		bind_data.directed = input.inputs[3].GetValue<bool>();
 	}
 	for (auto &parameter : input.named_parameters) {
-		if (duckdb::StringUtil::CIEquals(parameter.first, "directed")) {
+		if (NameMatches(parameter.first, "directed")) {
 			if (parameter.second.IsNull()) {
 				throw BinderException("duckrouting: 'directed' must not be NULL");
 			}
@@ -495,8 +496,7 @@ void ReadFlowArguments(TableFunctionBindInput &input, FlowBindData &bind_data) {
 //! max-flow algorithms, with two more columns for the min-cost variant.
 template <bool WithCost>
 duckdb::unique_ptr<FunctionData> FlowBind(ClientContext &, TableFunctionBindInput &input,
-                                          duckdb::vector<LogicalType> &return_types,
-                                          duckdb::vector<std::string> &names) {
+                                          duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<FlowBindData>();
 	ReadFlowArguments(input, *bind_data);
 	if (WithCost) {
@@ -544,8 +544,7 @@ void FlowScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 //! A single total: max_flow and max_flow_min_cost_cost.
 template <bool IsCost>
 duckdb::unique_ptr<FunctionData> TotalBind(ClientContext &, TableFunctionBindInput &input,
-                                           duckdb::vector<LogicalType> &return_types,
-                                           duckdb::vector<std::string> &names) {
+                                           duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<FlowBindData>();
 	ReadFlowArguments(input, *bind_data);
 	names = {IsCost ? "cost" : "flow"};
@@ -574,8 +573,7 @@ void TotalScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 
 //! Edge-disjoint paths use pgRouting's dijkstra column shape.
 duckdb::unique_ptr<FunctionData> DisjointBind(ClientContext &, TableFunctionBindInput &input,
-                                              duckdb::vector<LogicalType> &return_types,
-                                              duckdb::vector<std::string> &names) {
+                                              duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	auto bind_data = duckdb::make_uniq<FlowBindData>();
 	ReadFlowArguments(input, *bind_data);
 	names = {"seq", "path_id", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
@@ -622,8 +620,7 @@ void DisjointScan(ClientContext &, TableFunctionInput &data, DataChunk &output) 
 
 //! A bare `edge` column: max_cardinality_match.
 duckdb::unique_ptr<FunctionData> MatchBind(ClientContext &, TableFunctionBindInput &input,
-                                           duckdb::vector<LogicalType> &return_types,
-                                           duckdb::vector<std::string> &names) {
+                                           duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
