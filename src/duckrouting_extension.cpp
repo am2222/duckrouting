@@ -61,6 +61,17 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetKingOrderingFunction());
 	loader.RegisterFunction(duckrouting::GetSloanOrderingFunction());
 	loader.RegisterFunction(duckrouting::GetTopologicalSortFunction());
+
+	loader.RegisterFunction(duckrouting::GetSequentialVertexColoringFunction());
+	loader.RegisterFunction(duckrouting::GetEdgeColoringFunction());
+	loader.RegisterFunction(duckrouting::GetBipartiteFunction());
+	loader.RegisterFunction(duckrouting::GetIsPlanarFunction());
+	loader.RegisterFunction(duckrouting::GetBoyerMyrvoldFunction());
+	loader.RegisterFunction(duckrouting::GetBandwidthFunction());
+	loader.RegisterFunction(duckrouting::GetBetweennessCentralityFunction());
+	loader.RegisterFunction(duckrouting::GetStoerWagnerFunction());
+	loader.RegisterFunction(duckrouting::GetHawickCircuitsFunction());
+	loader.RegisterFunction(duckrouting::GetDominatorTreeFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

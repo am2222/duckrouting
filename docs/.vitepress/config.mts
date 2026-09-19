@@ -36,7 +36,8 @@ export default defineConfig({
           { text: 'All pairs', link: '/functions/all-pairs' },
           { text: 'Components', link: '/functions/components' },
           { text: 'Spanning trees', link: '/functions/spanning-trees' },
-          { text: 'Traversal & ordering', link: '/functions/traversal' }
+          { text: 'Traversal & ordering', link: '/functions/traversal' },
+          { text: 'Graph analysis', link: '/functions/analysis' }
         ]
       },
       {

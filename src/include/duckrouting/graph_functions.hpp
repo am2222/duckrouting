@@ -106,6 +106,81 @@ std::vector<DrivingDistanceRow> SpanningTraversal(const std::vector<EdgeRow> &ed
                                                   const std::vector<int64_t> &roots, Traversal traversal,
                                                   double limit);
 
+//! An identifier paired with a colour class.
+struct ColorRow {
+	int64_t id;
+	int64_t color;
+};
+
+//! Betweenness centrality per vertex.
+struct CentralityRow {
+	int64_t vid;
+	double centrality;
+};
+
+//! One edge crossing the minimum cut.
+struct MinCutRow {
+	int64_t edge;
+	double cost;
+	double mincut;
+};
+
+//! One step of a circuit; `path_seq` starts at 0, as pgRouting's does.
+struct CircuitRow {
+	int64_t path_id;
+	int64_t path_seq;
+	int64_t start_vid;
+	int64_t end_vid;
+	int64_t node;
+	int64_t edge;
+	double cost;
+	double agg_cost;
+};
+
+//! A vertex and its immediate dominator; 0 when it has none.
+struct DominatorRow {
+	int64_t vertex_id;
+	int64_t idom;
+};
+
+//! Which colour class each vertex or edge falls into. Colours are 1-based for
+//! the two colouring functions and 0/1 for the bipartite partition, matching
+//! pgRouting.
+std::vector<ColorRow> SequentialVertexColoring(const std::vector<EdgeRow> &edges);
+std::vector<ColorRow> EdgeColoring(const std::vector<EdgeRow> &edges);
+//! Empty when the graph is not bipartite, which is how pgRouting reports it.
+std::vector<ColorRow> Bipartite(const std::vector<EdgeRow> &edges);
+
+//! Whether the graph can be drawn without crossing edges.
+bool IsPlanar(const std::vector<EdgeRow> &edges);
+//! The planar embedding, as the edges around each vertex in rotation order.
+std::vector<PairRow> BoyerMyrvold(const std::vector<EdgeRow> &edges);
+
+//! Largest difference between the indices of two adjacent vertices.
+int64_t Bandwidth(const std::vector<EdgeRow> &edges);
+//! Relative betweenness centrality per vertex.
+std::vector<CentralityRow> BetweennessCentrality(const std::vector<EdgeRow> &edges, bool directed);
+
+//! The edges crossing a minimum cut of the undirected graph.
+std::vector<MinCutRow> StoerWagner(const std::vector<EdgeRow> &edges);
+
+//! Every circuit (closed path) in the directed graph.
+std::vector<CircuitRow> HawickCircuits(const std::vector<EdgeRow> &edges);
+
+//! Immediate dominator of each vertex, relative to `root`.
+std::vector<DominatorRow> DominatorTree(const std::vector<EdgeRow> &edges, int64_t root);
+
+duckdb::TableFunctionSet GetSequentialVertexColoringFunction();
+duckdb::TableFunctionSet GetEdgeColoringFunction();
+duckdb::TableFunctionSet GetBipartiteFunction();
+duckdb::TableFunctionSet GetIsPlanarFunction();
+duckdb::TableFunctionSet GetBoyerMyrvoldFunction();
+duckdb::TableFunctionSet GetBandwidthFunction();
+duckdb::TableFunctionSet GetBetweennessCentralityFunction();
+duckdb::TableFunctionSet GetStoerWagnerFunction();
+duckdb::TableFunctionSet GetHawickCircuitsFunction();
+duckdb::TableFunctionSet GetDominatorTreeFunction();
+
 duckdb::TableFunctionSet GetBreadthFirstSearchFunction();
 duckdb::TableFunctionSet GetDepthFirstSearchFunction();
 duckdb::TableFunctionSet GetBellmanFordFunction();

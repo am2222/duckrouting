@@ -24,8 +24,12 @@ WHERE function_name LIKE 'duckrouting_%' AND function_type = 'table'
 GROUP BY function_name ORDER BY function_name;
 ----
 duckrouting_articulation_points	1
+duckrouting_bandwidth	1
 duckrouting_bellman_ford	8
+duckrouting_betweenness_centrality	2
 duckrouting_biconnected_components	1
+duckrouting_bipartite	1
+duckrouting_boyer_myrvold	1
 duckrouting_breadth_first_search	4
 duckrouting_bridges	1
 duckrouting_connected_components	1
@@ -38,8 +42,12 @@ duckrouting_dijkstra_cost_matrix	2
 duckrouting_dijkstra_near	8
 duckrouting_dijkstra_near_cost	8
 duckrouting_dijkstra_via	4
+duckrouting_dominator_tree	1
 duckrouting_driving_distance	4
+duckrouting_edge_coloring	1
 duckrouting_floyd_warshall	2
+duckrouting_hawick_circuits	1
+duckrouting_is_planar	1
 duckrouting_johnson	2
 duckrouting_king_ordering	1
 duckrouting_kruskal	1
@@ -52,7 +60,9 @@ duckrouting_prim	1
 duckrouting_prim_bfs	4
 duckrouting_prim_dd	2
 duckrouting_prim_dfs	4
+duckrouting_sequential_vertex_coloring	1
 duckrouting_sloan_ordering	1
+duckrouting_stoer_wagner	1
 duckrouting_strong_components	1
 duckrouting_topological_sort	1
 duckrouting_transitive_closure	1

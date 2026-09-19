@@ -1,0 +1,280 @@
+# name: test/sql/analysis.test
+# description: colouring, planarity, metrics, min cut, circuits and dominator tree
+# group: [duckrouting]
+#
+# Expected results from pgRouting docqueries/coloring/, planar/, metrics/,
+# mincut/, circuits/ and dominator/.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# ---------------------------------------------------------------------------
+# duckrouting_sequential_vertex_coloring -- pgRouting q1
+# ---------------------------------------------------------------------------
+
+query II
+SELECT node, color FROM duckrouting_sequential_vertex_coloring(
+  'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id')
+WHERE node <= 12 ORDER BY node;
+----
+1	1
+2	1
+3	2
+4	2
+5	1
+6	2
+7	1
+8	2
+9	1
+10	1
+11	2
+12	1
+
+# A colouring is only correct if no edge joins two vertices of one colour.
+query I
+SELECT count(*) FROM edges e
+JOIN duckrouting_sequential_vertex_coloring('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id') a ON a.node = e.source
+JOIN duckrouting_sequential_vertex_coloring('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id') b ON b.node = e.target
+WHERE a.color = b.color;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_edge_coloring
+# ---------------------------------------------------------------------------
+# KNOWN TIE: a proper edge colouring is not unique. pgRouting gives edge 1 the
+# colour 1; Boost gives it 3. The other 17 edges agree. Assert the defining
+# property instead: edges meeting at a vertex never share a colour.
+
+query I
+SELECT count(*) FROM edges a
+JOIN edges b ON a.id < b.id
+  AND (a.source = b.source OR a.source = b.target OR a.target = b.source OR a.target = b.target)
+JOIN duckrouting_edge_coloring('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id') ca ON ca.edge = a.id
+JOIN duckrouting_edge_coloring('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id') cb ON cb.edge = b.id
+WHERE ca.color = cb.color;
+----
+0
+
+# Every edge gets exactly one colour.
+query I
+SELECT count(*) FROM duckrouting_edge_coloring('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id');
+----
+18
+
+# ---------------------------------------------------------------------------
+# duckrouting_bipartite -- pgRouting q1
+# ---------------------------------------------------------------------------
+
+query II
+SELECT node, color FROM duckrouting_bipartite('SELECT id, source, target, cost, reverse_cost FROM edges')
+WHERE node <= 13 ORDER BY node;
+----
+1	0
+2	0
+3	1
+4	1
+5	0
+6	1
+7	0
+8	1
+9	0
+10	0
+11	1
+12	0
+13	0
+
+# The partition is only valid if every edge crosses it.
+query I
+SELECT count(*) FROM edges e
+JOIN duckrouting_bipartite('SELECT id, source, target, cost, reverse_cost FROM edges') a ON a.node = e.source
+JOIN duckrouting_bipartite('SELECT id, source, target, cost, reverse_cost FROM edges') b ON b.node = e.target
+WHERE a.color = b.color;
+----
+0
+
+# A triangle is not bipartite, and pgRouting reports that as an empty result.
+query I
+SELECT count(*) FROM duckrouting_bipartite(
+  'SELECT * FROM (VALUES (1,1,2,1.0,1.0),(2,2,3,1.0,1.0),(3,3,1,1.0,1.0)) t(id,source,target,cost,reverse_cost)');
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_is_planar and duckrouting_boyer_myrvold -- pgRouting q1
+# ---------------------------------------------------------------------------
+
+query I
+SELECT * FROM duckrouting_is_planar('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+true
+
+# K5 is the smallest non-planar graph.
+query I
+SELECT * FROM duckrouting_is_planar(
+  'SELECT * FROM (VALUES (1,1,2,1.0,1.0),(2,1,3,1.0,1.0),(3,1,4,1.0,1.0),(4,1,5,1.0,1.0),
+                         (5,2,3,1.0,1.0),(6,2,4,1.0,1.0),(7,2,5,1.0,1.0),
+                         (8,3,4,1.0,1.0),(9,3,5,1.0,1.0),(10,4,5,1.0,1.0)) t(id,source,target,cost,reverse_cost)');
+----
+false
+
+# The embedding lists each edge from both of its endpoints, so twice per edge.
+query I
+SELECT count(*) FROM duckrouting_boyer_myrvold('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+36
+
+# A non-planar graph has no embedding to report.
+query I
+SELECT count(*) FROM duckrouting_boyer_myrvold(
+  'SELECT * FROM (VALUES (1,1,2,1.0,1.0),(2,1,3,1.0,1.0),(3,1,4,1.0,1.0),(4,1,5,1.0,1.0),
+                         (5,2,3,1.0,1.0),(6,2,4,1.0,1.0),(7,2,5,1.0,1.0),
+                         (8,3,4,1.0,1.0),(9,3,5,1.0,1.0),(10,4,5,1.0,1.0)) t(id,source,target,cost,reverse_cost)');
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_bandwidth -- pgRouting q1
+# ---------------------------------------------------------------------------
+
+query I
+SELECT * FROM duckrouting_bandwidth('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+5
+
+# ---------------------------------------------------------------------------
+# duckrouting_betweenness_centrality -- pgRouting q1
+# ---------------------------------------------------------------------------
+# Boost's relative_betweenness_centrality always applies the undirected
+# normalisation; a directed graph has twice as many ordered pairs, so we scale
+# by 1/((n-1)(n-2)) instead. That is what reproduces pgRouting's numbers.
+
+query IR
+SELECT * FROM duckrouting_betweenness_centrality(
+  'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 5') ORDER BY vid;
+----
+5	0
+6	0.5
+7	0
+10	0.25
+15	0
+
+# Centrality is never negative, and a vertex nothing routes through scores 0.
+query I
+SELECT count(*) FROM duckrouting_betweenness_centrality('SELECT id, source, target, cost, reverse_cost FROM edges')
+WHERE centrality < 0;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_stoer_wagner -- pgRouting q1 and q2
+# ---------------------------------------------------------------------------
+# The graph must carry each edge once here: cost and reverse_cost describe the
+# same physical edge, and counting both would double every cut that crosses it.
+
+query IIRR
+SELECT * FROM duckrouting_stoer_wagner('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17');
+----
+1	14	1	1
+
+query IIRR
+SELECT * FROM duckrouting_stoer_wagner('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id = 18');
+----
+1	18	1	1
+
+# The reported cut weight is the sum of the reported edge costs.
+query I
+SELECT count(*) FROM (
+  SELECT sum(cost) AS total, max(mincut) AS cut
+  FROM duckrouting_stoer_wagner('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17')
+) WHERE total <> cut;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_hawick_circuits -- pgRouting q1
+# ---------------------------------------------------------------------------
+# pgRouting reports 94 rows for this graph.
+
+query I
+SELECT count(*) FROM duckrouting_hawick_circuits('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+94
+
+# Every circuit starts and ends on the same vertex, and path_seq counts from 0.
+query I
+SELECT count(*) FROM (
+  SELECT path_id, min(path_seq) AS first_seq, count(*) AS steps,
+         min(start_vid) AS s, max(end_vid) AS e
+  FROM duckrouting_hawick_circuits('SELECT id, source, target, cost, reverse_cost FROM edges')
+  GROUP BY path_id
+) WHERE first_seq <> 0 OR s <> e;
+----
+0
+
+# The first and last node of each circuit coincide.
+query I
+SELECT count(*) FROM (
+  SELECT path_id,
+         first(node ORDER BY path_seq) AS head,
+         last(node ORDER BY path_seq) AS tail
+  FROM duckrouting_hawick_circuits('SELECT id, source, target, cost, reverse_cost FROM edges')
+  GROUP BY path_id
+) WHERE head <> tail;
+----
+0
+
+# Every reported edge really joins its node to the next one.
+query I
+SELECT count(*) FROM (
+  SELECT c.node, c.edge, lead(c.node) OVER (PARTITION BY c.path_id ORDER BY c.path_seq) AS next_node
+  FROM duckrouting_hawick_circuits('SELECT id, source, target, cost, reverse_cost FROM edges') c
+) p JOIN edges e ON e.id = p.edge
+WHERE p.next_node IS NOT NULL
+  AND NOT ((e.source = p.node AND e.target = p.next_node) OR (e.target = p.node AND e.source = p.next_node));
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_dominator_tree
+# ---------------------------------------------------------------------------
+# pgRouting's published example for this function reports values we could not
+# reconcile with the graph (it has vertex 3 dominating itself), so these assert
+# the defining properties rather than copying that output.
+
+# The root dominates itself, which is reported as having no dominator.
+query I
+SELECT idom FROM duckrouting_dominator_tree('SELECT id, source, target, cost, reverse_cost FROM edges', 5)
+WHERE vertex_id = 5;
+----
+0
+
+# To reach vertex 1 from 5 you must pass through 3; to reach 3 you must pass
+# through 7. Those are the only ways in.
+query II
+SELECT vertex_id, idom FROM duckrouting_dominator_tree('SELECT id, source, target, cost, reverse_cost FROM edges', 5)
+WHERE vertex_id IN (1, 3) ORDER BY vertex_id;
+----
+1	3
+3	7
+
+# Vertices the root cannot reach have no dominator either.
+query I
+SELECT idom FROM duckrouting_dominator_tree('SELECT id, source, target, cost, reverse_cost FROM edges', 5)
+WHERE vertex_id = 13;
+----
+0
+
+# A root outside the graph yields nothing.
+query I
+SELECT count(*) FROM duckrouting_dominator_tree('SELECT id, source, target, cost, reverse_cost FROM edges', 9999);
+----
+0

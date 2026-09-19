@@ -63,20 +63,21 @@ wrappers is unencumbered.
 | `pgr_edgeDisjointPaths` | runs on the same BGL flow graph | |
 | `pgr_maxFlowMinCost`, `pgr_maxFlowMinCost_Cost` | `successive_shortest_path_nonnegative_weights` + `find_flow_cost` | |
 | `pgr_maxCardinalityMatch` | `edmonds_maximum_cardinality_matching` | |
-| `pgr_stoerWagner` | `stoer_wagner_min_cut` | |
+| `pgr_stoerWagner` | `stoer_wagner_min_cut` | `duckrouting_stoer_wagner` |
 | `pgr_transitiveClosure` | `transitive_closure` | `duckrouting_transitive_closure` |
-| `pgr_lengauerTarjanDominatorTree` | `dominator_tree` | |
-| `pgr_hawickCircuits` | `hawick_circuits` | |
-| `pgr_bandwidth` | `bandwidth` | |
-| `pgr_betweennessCentrality` | `brandes_betweenness_centrality` | |
-| `pgr_sequentialVertexColoring` | `sequential_vertex_coloring` | |
-| `pgr_edgeColoring` | `edge_coloring` | |
-| `pgr_bipartite` | `is_bipartite` | |
+| `pgr_lengauerTarjanDominatorTree` | `dominator_tree` | `duckrouting_dominator_tree` |
+| `pgr_hawickCircuits` | `hawick_circuits` | `duckrouting_hawick_circuits` |
+| `pgr_bandwidth` | `bandwidth` | `duckrouting_bandwidth` |
+| `pgr_betweennessCentrality` | `brandes_betweenness_centrality` | `duckrouting_betweenness_centrality` |
+| `pgr_sequentialVertexColoring` | `sequential_vertex_coloring` | `duckrouting_sequential_vertex_coloring` |
+| `pgr_edgeColoring` | `edge_coloring` | `duckrouting_edge_coloring` |
+| `pgr_bipartite` | `is_bipartite` | `duckrouting_bipartite` |
 | `pgr_cuthillMckeeOrdering` | `cuthill_mckee_ordering` | `duckrouting_cuthill_mckee_ordering` |
 | `pgr_kingOrdering` | `king_ordering` | `duckrouting_king_ordering` |
 | `pgr_sloanOrdering` | `sloan_ordering` | `duckrouting_sloan_ordering` |
 | `pgr_topologicalSort` | `topological_sort` | `duckrouting_topological_sort` |
-| `pgr_boyerMyrvold`, `pgr_isPlanar` | `boyer_myrvold_planarity_test` | |
+| `pgr_isPlanar` | `boyer_myrvold_planarity_test` | `duckrouting_is_planar` |
+| `pgr_boyerMyrvold` | `boyer_myrvold_planarity_test` (embedding) | `duckrouting_boyer_myrvold` |
 | `pgr_TSP`, `pgr_TSPeuclidean` | `metric_tsp_approx_tour` | |
 | `pgr_contractionHierarchies` | `dijkstra_shortest_paths` over a CH `adjacency_list` | |
 
@@ -133,6 +134,29 @@ pgRouting's q93 and q133 ask for `12 -> 7` undirected. Two paths cost exactly
 equal-cost path wins, so this is not a defect in either implementation. The
 tests assert hop count, endpoints and total cost for those cases, plus a check
 that every reported edge really connects its two reported nodes.
+
+A proper **edge colouring** is likewise not unique: pgRouting gives edge 1 the
+colour 1 where Boost gives it 3, with the other 17 edges agreeing. The test
+asserts the defining property -- edges meeting at a vertex never share a colour.
+
+Two functions needed corrections that are worth recording, because both would
+have produced plausible-looking wrong numbers:
+
+- **`stoer_wagner`** sums edge weights, so the graph must carry each edge once.
+  `BuildGraph` deliberately adds a parallel edge for `cost` and another for
+  `reverse_cost`, which doubled the weight of any cut crossing such an edge --
+  a mincut of 2 where pgRouting reports 1. Min-cut gets its own single-edge
+  graph.
+- **`betweenness_centrality`**: Boost's `relative_betweenness_centrality`
+  always applies the *undirected* normalisation, `2/((n-1)(n-2))`. A directed
+  graph has twice as many ordered pairs and wants `1/((n-1)(n-2))`. Scaling
+  explicitly reproduces pgRouting's figures exactly.
+
+pgRouting's published example for **`pgr_lengauerTarjanDominatorTree`** reports
+values we could not reconcile with the sample graph -- it shows vertex 3
+dominating itself. duckrouting's output is checked against the graph instead:
+from root 5, reaching vertex 1 requires passing 3, and reaching 3 requires
+passing 7.
 
 The vertex orderings are the same story: `cuthillMckee`, `king` and `sloan`
 return a permutation of the vertices, and the order among equal-degree vertices

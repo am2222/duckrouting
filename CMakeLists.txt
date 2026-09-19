@@ -26,7 +26,8 @@ set(EXTENSION_SOURCES
     src/graph_functions.cpp
     src/spanning.cpp
     src/traversal.cpp
-    src/ordering.cpp)
+    src/ordering.cpp
+    src/analysis.cpp)
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
