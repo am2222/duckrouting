@@ -9,8 +9,6 @@
 
 namespace duckrouting {
 
-namespace {
-
 //! Replaces every edge carrying points with the chain of segments between
 //! them. This follows pgRouting's rules in src/withPoints/withPoints.cpp: a
 //! point becomes a vertex numbered -pid, and which of the two directions it
@@ -117,7 +115,17 @@ std::vector<EdgeRow> SplitEdgesAtPoints(const std::vector<EdgeRow> &edges, const
 	return result;
 }
 
-} // namespace
+std::vector<PathRow> HidePoints(const std::vector<PathRow> &rows, const std::vector<int64_t> &visible) {
+	std::set<int64_t> keep(visible.begin(), visible.end());
+	std::vector<PathRow> kept;
+	for (size_t i = 0; i < rows.size(); i++) {
+		if (rows[i].node < 0 && !keep.count(rows[i].node)) {
+			continue;
+		}
+		kept.push_back(rows[i]);
+	}
+	return kept;
+}
 
 std::vector<DrivingDistanceRow> WithPointsDrivingDistance(const std::vector<EdgeRow> &edges,
                                                           const std::vector<PointOnEdge> &points,

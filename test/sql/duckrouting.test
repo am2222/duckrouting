@@ -91,4 +91,9 @@ duckrouting_topological_sort	1
 duckrouting_transitive_closure	1
 duckrouting_tsp	3
 duckrouting_tsp_euclidean	3
+duckrouting_with_points	8
+duckrouting_with_points_cost	8
+duckrouting_with_points_cost_matrix	2
 duckrouting_with_points_dd	4
+duckrouting_with_points_ksp	8
+duckrouting_with_points_via	2

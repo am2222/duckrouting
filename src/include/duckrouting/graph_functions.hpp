@@ -334,6 +334,22 @@ duckdb::TableFunctionSet GetEdwardMooreFunction();
 duckdb::TableFunctionSet GetBinaryBreadthFirstSearchFunction();
 duckdb::TableFunctionSet GetFullVersionFunction();
 
+//! Replaces each edge carrying points with the chain of segments between
+//! them. A point becomes a vertex numbered -pid; which direction it connects
+//! to depends on the driving side. Shared by the whole withPoints family.
+std::vector<EdgeRow> SplitEdgesAtPoints(const std::vector<EdgeRow> &edges, const std::vector<PointOnEdge> &points,
+                                        char driving_side);
+
+//! Drops point vertices that the caller did not ask about, which is what
+//! `details => false` means.
+std::vector<PathRow> HidePoints(const std::vector<PathRow> &rows, const std::vector<int64_t> &visible);
+
+duckdb::TableFunctionSet GetWithPointsFunction();
+duckdb::TableFunctionSet GetWithPointsCostFunction();
+duckdb::TableFunctionSet GetWithPointsCostMatrixFunction();
+duckdb::TableFunctionSet GetWithPointsViaFunction();
+duckdb::TableFunctionSet GetWithPointsKspFunction();
+
 duckdb::TableFunctionSet GetContractionHierarchiesFunction();
 duckdb::TableFunctionSet GetWithPointsDDFunction();
 

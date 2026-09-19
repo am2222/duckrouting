@@ -103,6 +103,12 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetExtractVerticesFunction());
 	loader.RegisterFunction(duckrouting::GetDegreeFunction());
 	loader.RegisterFunction(duckrouting::GetFullVersionFunction());
+
+	loader.RegisterFunction(duckrouting::GetWithPointsFunction());
+	loader.RegisterFunction(duckrouting::GetWithPointsCostFunction());
+	loader.RegisterFunction(duckrouting::GetWithPointsCostMatrixFunction());
+	loader.RegisterFunction(duckrouting::GetWithPointsViaFunction());
+	loader.RegisterFunction(duckrouting::GetWithPointsKspFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

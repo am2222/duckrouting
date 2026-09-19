@@ -1,0 +1,209 @@
+# name: test/sql/with_points.test
+# description: the withPoints family -- routing from points partway along edges
+# group: [duckrouting]
+#
+# Each point becomes a vertex numbered -pid, splitting its edge into segments
+# whose costs are proportional to the fractions. All five functions share that
+# machinery and then delegate to the ordinary routing algorithms.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+statement ok
+CREATE TABLE poi(pid BIGINT, edge_id BIGINT, fraction DOUBLE, side VARCHAR);
+
+statement ok
+INSERT INTO poi VALUES (1,1,0.4,'b'),(2,15,0.4,'b'),(3,12,0.6,'b'),(4,6,0.3,'b'),(5,5,0.8,'b'),(6,4,0.7,'b');
+
+# ---------------------------------------------------------------------------
+# duckrouting_with_points
+# ---------------------------------------------------------------------------
+# Point 1 sits 40% along edge 1 and point 3 sits 60% along edge 12. The route
+# runs -1 -> 6 (the remaining 0.6 of edge 1), through point -6 on edge 4, then
+# vertices 7 and 8, ending 0.6 into edge 12.
+
+query IIIIR
+SELECT path_seq, start_vid, end_vid, node, round(agg_cost, 6)
+FROM duckrouting_with_points('SELECT id, source, target, cost, reverse_cost FROM edges',
+                             'SELECT pid, edge_id, fraction, side FROM poi', -1, -3, 'b', details => true);
+----
+1	-1	-3	-1	0
+2	-1	-3	6	0.6
+3	-1	-3	-6	1.3
+4	-1	-3	7	1.6
+5	-1	-3	8	2.6
+6	-1	-3	-3	3.2
+
+# Without details, points other than the endpoints are hidden -- but the route
+# itself, and therefore its cost, is unchanged.
+query I
+SELECT node FROM duckrouting_with_points('SELECT id, source, target, cost, reverse_cost FROM edges',
+                                         'SELECT pid, edge_id, fraction, side FROM poi', -1, -3, 'b');
+----
+-1
+6
+7
+8
+-3
+
+query I
+SELECT count(*) FROM (
+  SELECT max(agg_cost) AS a FROM duckrouting_with_points('SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT pid, edge_id, fraction, side FROM poi', -1, -3, 'b', details => true)
+) x, (
+  SELECT max(agg_cost) AS b FROM duckrouting_with_points('SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT pid, edge_id, fraction, side FROM poi', -1, -3, 'b')
+) y WHERE abs(x.a - y.b) > 1e-9;
+----
+0
+
+# Routing between two real vertices must match plain Dijkstra: splitting an
+# edge and putting it back together changes nothing.
+query I
+SELECT count(*) FROM (
+  SELECT start_vid, end_vid, max(agg_cost) AS total
+  FROM duckrouting_with_points('SELECT id, source, target, cost, reverse_cost FROM edges',
+                               'SELECT pid, edge_id, fraction, side FROM poi', 6, 17, 'b')
+  GROUP BY start_vid, end_vid
+  EXCEPT
+  SELECT start_vid, end_vid, max(agg_cost)
+  FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17)
+  GROUP BY start_vid, end_vid
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_with_points_cost
+# ---------------------------------------------------------------------------
+
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 6)
+FROM duckrouting_with_points_cost('SELECT id, source, target, cost, reverse_cost FROM edges',
+                                  'SELECT pid, edge_id, fraction, side FROM poi', -1, -3, 'b');
+----
+-1	-3	3.2
+
+# The cost form must agree with the final agg_cost of the path form.
+query I
+SELECT count(*) FROM (
+  SELECT start_vid, end_vid, agg_cost FROM duckrouting_with_points_cost(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT pid, edge_id, fraction, side FROM poi', [-1,-3], [6,7], 'b')
+  EXCEPT
+  SELECT start_vid, end_vid, agg_cost FROM duckrouting_with_points(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT pid, edge_id, fraction, side FROM poi', [-1,-3], [6,7], 'b', details => true)
+  WHERE edge = -1
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_with_points_cost_matrix
+# ---------------------------------------------------------------------------
+
+# Three vertices, six ordered pairs.
+query I
+SELECT count(*) FROM duckrouting_with_points_cost_matrix(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, side FROM poi', [-1, -3, 6], 'b');
+----
+6
+
+# The matrix is the cost function applied to one list against itself.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_with_points_cost_matrix('SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT pid, edge_id, fraction, side FROM poi', [-1,-3,6], 'b')
+  EXCEPT
+  SELECT * FROM duckrouting_with_points_cost('SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT pid, edge_id, fraction, side FROM poi', [-1,-3,6], [-1,-3,6], 'b')
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_with_points_via
+# ---------------------------------------------------------------------------
+
+# Two legs, and the route closes with pgRouting's -2 terminator.
+query IIIR
+SELECT path_id, node, edge, round(route_agg_cost, 6)
+FROM duckrouting_with_points_via('SELECT id, source, target, cost, reverse_cost FROM edges',
+                                 'SELECT pid, edge_id, fraction, side FROM poi', [-1, 7, -3], 'b');
+----
+1	-1	1	0
+1	6	4	0.6
+1	-6	4	1.3
+1	7	-1	1.6
+2	7	10	1.6
+2	8	12	2.6
+2	-3	-2	3.2
+
+# route_agg_cost runs across the whole route, so the end matches the direct cost.
+query I
+SELECT count(*) FROM (
+  SELECT max(route_agg_cost) AS via FROM duckrouting_with_points_via(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT pid, edge_id, fraction, side FROM poi', [-1, 7, -3], 'b')
+) v, (
+  SELECT agg_cost AS direct FROM duckrouting_with_points_cost(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT pid, edge_id, fraction, side FROM poi', -1, -3, 'b')
+) d WHERE abs(v.via - d.direct) > 1e-9;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_with_points_ksp
+# ---------------------------------------------------------------------------
+
+# K = 1 must reproduce duckrouting_with_points exactly.
+query I
+SELECT count(*) FROM (
+  SELECT path_seq, start_vid, end_vid, node, edge, cost, agg_cost
+  FROM duckrouting_with_points_ksp('SELECT id, source, target, cost, reverse_cost FROM edges',
+                                   'SELECT pid, edge_id, fraction, side FROM poi', -1, -3, 1, 'b')
+  EXCEPT
+  SELECT path_seq, start_vid, end_vid, node, edge, cost, agg_cost
+  FROM duckrouting_with_points('SELECT id, source, target, cost, reverse_cost FROM edges',
+                               'SELECT pid, edge_id, fraction, side FROM poi', -1, -3, 'b', details => true)
+);
+----
+0
+
+# Paths stay loopless and non-decreasing in cost.
+query I
+SELECT count(*) FROM (
+  SELECT path_id, node FROM duckrouting_with_points_ksp(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT pid, edge_id, fraction, side FROM poi', 6, 17, 3, 'b')
+  GROUP BY path_id, node HAVING count(*) > 1
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT agg_cost, lag(agg_cost) OVER (ORDER BY path_id) AS previous
+  FROM duckrouting_with_points_ksp('SELECT id, source, target, cost, reverse_cost FROM edges',
+                                   'SELECT pid, edge_id, fraction, side FROM poi', 6, 17, 3, 'b')
+  WHERE edge = -1
+) WHERE previous IS NOT NULL AND agg_cost < previous;
+----
+0
+
+statement error
+SELECT * FROM duckrouting_with_points('SELECT id, source, target, cost, reverse_cost FROM edges',
+                                      'SELECT pid, edge_id, fraction, side FROM poi', -1, -3, 'x');
+----
+'driving_side' must be 'r', 'l' or 'b'
