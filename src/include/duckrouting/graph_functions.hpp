@@ -356,6 +356,32 @@ std::vector<ContractionRow> Contract(const std::vector<EdgeRow> &edges, bool dir
 
 //! Registers the three geometry helpers, which are SQL macros over DuckDB's
 //! spatial extension rather than C++ functions.
+//! One edge of a transformed graph.
+struct TransformedEdgeRow {
+	int64_t source;
+	int64_t target;
+	double cost;
+	double reverse_cost;
+	int64_t edge;
+};
+
+//! The line graph: each edge of the input becomes a vertex, and two such
+//! vertices are joined when the edges they stand for share an endpoint.
+std::vector<TransformedEdgeRow> LineGraph(const std::vector<EdgeRow> &edges, bool directed);
+
+//! The full line graph, which additionally splits each vertex into one node
+//! per incident half-edge so that turn costs can be attached.
+std::vector<TransformedEdgeRow> LineGraphFull(const std::vector<EdgeRow> &edges);
+
+//! A closed walk traversing every edge at least once, and its total cost.
+std::vector<PathRow> ChinesePostman(const std::vector<EdgeRow> &edges, bool directed);
+double ChinesePostmanCost(const std::vector<EdgeRow> &edges, bool directed);
+
+duckdb::TableFunctionSet GetLineGraphFunction();
+duckdb::TableFunctionSet GetLineGraphFullFunction();
+duckdb::TableFunctionSet GetChinesePostmanFunction();
+duckdb::TableFunctionSet GetChinesePostmanCostFunction();
+
 void RegisterGeometryMacros(duckdb::ExtensionLoader &loader);
 
 duckdb::TableFunctionSet GetContractionFunction();

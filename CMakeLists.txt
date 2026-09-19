@@ -37,7 +37,8 @@ set(EXTENSION_SOURCES
     src/utilities.cpp
     src/with_points_family.cpp
     src/contract_ops.cpp
-    src/geometry.cpp)
+    src/geometry.cpp
+    src/transform.cpp)
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
