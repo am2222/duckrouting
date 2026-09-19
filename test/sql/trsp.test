@@ -66,17 +66,35 @@ SELECT node, edge, agg_cost FROM duckrouting_trsp(
 8	-1	2
 
 # Restricting exactly that turn, at a cost high enough to matter, forces a
-# detour out to vertex 3 and back -- which resets the edge history.
-query IIR
-SELECT node, edge, agg_cost FROM duckrouting_trsp(
+# detour. Several detours cost 4 -- out to vertex 3 and back, or round through
+# 10 and 11 -- and which one is chosen is a tie, so assert the cost and the
+# thing that actually matters: the restricted turn is not taken.
+query R
+SELECT max(agg_cost) FROM duckrouting_trsp(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   'SELECT * FROM (VALUES ([4,10]::BIGINT[], 100.0)) t(path, cost)', 6, 8, false);
 ----
-6	4	0
-7	7	1
-3	7	2
-7	10	3
-8	-1	4
+4
+
+# Edge 4 is never immediately followed by edge 10, which is the restriction.
+query I
+SELECT count(*) FROM (
+  SELECT edge, lag(edge) OVER (ORDER BY seq) AS previous
+  FROM duckrouting_trsp('SELECT id, source, target, cost, reverse_cost FROM edges',
+                        'SELECT * FROM (VALUES ([4,10]::BIGINT[], 100.0)) t(path, cost)', 6, 8, false)
+) WHERE previous = 4 AND edge = 10;
+----
+0
+
+# Without the restriction that turn is exactly what gets used.
+query I
+SELECT count(*) FROM (
+  SELECT edge, lag(edge) OVER (ORDER BY seq) AS previous
+  FROM duckrouting_trsp('SELECT id, source, target, cost, reverse_cost FROM edges',
+                        'SELECT * FROM (VALUES ([999]::BIGINT[], 1.0)) t(path, cost)', 6, 8, false)
+) WHERE previous = 4 AND edge = 10;
+----
+1
 
 # A small penalty is not a ban: the same route is kept and simply costs more.
 query R

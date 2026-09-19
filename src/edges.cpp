@@ -21,12 +21,22 @@ using duckdb::string;
 namespace {
 
 //! Case-insensitive membership test over the column names of `edges_sql`.
-bool HasColumn(const duckdb::vector<string> &names, const char *wanted) {
-	return std::any_of(names.begin(), names.end(),
-	                   [&](const string &name) { return duckdb::StringUtil::CIEquals(name, wanted); });
+//! Templated on the container because PreparedStatement::GetNames() does not
+//! return the same type across DuckDB versions -- v1.5 hands back a
+//! `duckdb::vector<string>` reference, v2 something else. Deducing it keeps
+//! this working either way.
+template <typename Names>
+bool HasColumn(const Names &names, const char *wanted) {
+	for (auto it = names.begin(); it != names.end(); ++it) {
+		if (duckdb::StringUtil::CIEquals(*it, wanted)) {
+			return true;
+		}
+	}
+	return false;
 }
 
-void RequireColumn(const duckdb::vector<string> &names, const char *wanted) {
+template <typename Names>
+void RequireColumn(const Names &names, const char *wanted) {
 	if (!HasColumn(names, wanted)) {
 		throw BinderException("duckrouting: the edges query must expose a '%s' column", wanted);
 	}
@@ -45,7 +55,7 @@ std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql, 
 		throw BinderException("duckrouting: could not prepare the edges query: %s", prepared->GetError());
 	}
 
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	const bool has_id = HasColumn(names, "id");
 	if (require_id && !has_id) {
 		RequireColumn(names, "id");
@@ -121,7 +131,7 @@ std::vector<FlowEdgeRow> LoadFlowEdges(ClientContext &context, const string &edg
 		throw BinderException("duckrouting: could not prepare the edges query: %s", prepared->GetError());
 	}
 
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	RequireColumn(names, "id");
 	RequireColumn(names, "source");
 	RequireColumn(names, "target");
@@ -189,7 +199,7 @@ std::vector<CoordinateEdgeRow> LoadCoordinateEdges(ClientContext &context, const
 		throw BinderException("duckrouting: could not prepare the edges query: %s", prepared->GetError());
 	}
 
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	RequireColumn(names, "id");
 	RequireColumn(names, "source");
 	RequireColumn(names, "target");
@@ -266,7 +276,7 @@ std::vector<MatrixCell> LoadCostMatrix(ClientContext &context, const string &mat
 	if (prepared->HasError()) {
 		throw BinderException("duckrouting: could not prepare the matrix query: %s", prepared->GetError());
 	}
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	RequireColumn(names, "start_vid");
 	RequireColumn(names, "end_vid");
 	RequireColumn(names, "agg_cost");
@@ -309,7 +319,7 @@ std::vector<PlacedPoint> LoadPoints(ClientContext &context, const string &points
 	if (prepared->HasError()) {
 		throw BinderException("duckrouting: could not prepare the coordinates query: %s", prepared->GetError());
 	}
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	RequireColumn(names, "id");
 	RequireColumn(names, "x");
 	RequireColumn(names, "y");
@@ -350,7 +360,7 @@ std::vector<PointOnEdge> LoadPointsOnEdges(ClientContext &context, const string 
 	if (prepared->HasError()) {
 		throw BinderException("duckrouting: could not prepare the points query: %s", prepared->GetError());
 	}
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	RequireColumn(names, "pid");
 	RequireColumn(names, "edge_id");
 	RequireColumn(names, "fraction");
@@ -412,7 +422,7 @@ std::vector<Restriction> LoadRestrictions(ClientContext &context, const string &
 	if (prepared->HasError()) {
 		throw BinderException("duckrouting: could not prepare the restrictions query: %s", prepared->GetError());
 	}
-	auto &names = prepared->GetNames();
+	const auto &names = prepared->GetNames();
 	RequireColumn(names, "path");
 	RequireColumn(names, "cost");
 
