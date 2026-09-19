@@ -1,0 +1,23 @@
+# name: test/sql/duckrouting.test
+# description: test duckrouting extension
+# group: [sql]
+
+# Before we load the extension, this will fail
+statement error
+SELECT duckrouting('Sam');
+----
+Catalog Error: Scalar Function with name duckrouting does not exist!
+
+# Require statement will ensure this test is run with this extension loaded
+require duckrouting
+
+# Confirm the extension works
+query I
+SELECT duckrouting('Sam');
+----
+...........🦆 Sam
+
+query I
+SELECT duckrouting_openssl_version('Michael') ILIKE 'Duckrouting Michael, my linked OpenSSL version is OpenSSL%';
+----
+true
