@@ -85,6 +85,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetAStarFunction());
 	loader.RegisterFunction(duckrouting::GetAStarCostFunction());
 	loader.RegisterFunction(duckrouting::GetAStarCostMatrixFunction());
+
+	loader.RegisterFunction(duckrouting::GetTspFunction());
+	loader.RegisterFunction(duckrouting::GetTspEuclideanFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

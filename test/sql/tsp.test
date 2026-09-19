@@ -1,0 +1,145 @@
+# name: test/sql/tsp.test
+# description: travelling salesman family vs pgRouting output
+# group: [duckrouting]
+#
+# Expected results from pgRouting docqueries/tsp/.
+#
+# metric_tsp_approx is an approximation: it guarantees a tour at most twice the
+# optimum when the costs obey the triangle inequality, not the optimum itself.
+# Which tour it finds depends on spanning-tree tie-breaking, so most assertions
+# here check that the tour is well formed and its cost, rather than a fixed
+# sequence of stops.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+ (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+ (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+statement ok
+CREATE TABLE matrix AS SELECT * FROM duckrouting_dijkstra_cost_matrix(
+  'SELECT id, source, target, cost, reverse_cost FROM edges', [5,6,10,15], false);
+
+# ---------------------------------------------------------------------------
+# duckrouting_tsp -- pgRouting q2
+# ---------------------------------------------------------------------------
+# pgRouting feeds a dijkstraCostMatrix straight into pgr_TSP and gets the tour
+# 5, 6, 10, 15, back to 5, costing 6. We reproduce that exactly.
+
+query IIRR
+SELECT * FROM duckrouting_tsp('SELECT start_vid, end_vid, agg_cost FROM matrix');
+----
+1	5	0	0
+2	6	1	1
+3	10	1	2
+4	15	1	3
+5	5	3	6
+
+# A tour visits every vertex once and returns to where it began.
+query I
+SELECT count(*) FROM (
+  SELECT node FROM duckrouting_tsp('SELECT start_vid, end_vid, agg_cost FROM matrix')
+  GROUP BY node HAVING count(*) > CASE WHEN node = (SELECT node FROM duckrouting_tsp('SELECT start_vid, end_vid, agg_cost FROM matrix') WHERE seq = 1) THEN 2 ELSE 1 END
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT first(node ORDER BY seq) AS head, last(node ORDER BY seq) AS tail
+  FROM duckrouting_tsp('SELECT start_vid, end_vid, agg_cost FROM matrix')
+) WHERE head <> tail;
+----
+0
+
+# Four vertices give five rows: each once, plus the return.
+query I
+SELECT count(*) FROM duckrouting_tsp('SELECT start_vid, end_vid, agg_cost FROM matrix');
+----
+5
+
+# agg_cost is the running total of cost.
+query I
+SELECT count(*) FROM (
+  SELECT agg_cost, sum(cost) OVER (ORDER BY seq) AS running
+  FROM duckrouting_tsp('SELECT start_vid, end_vid, agg_cost FROM matrix')
+) WHERE abs(agg_cost - running) > 1e-9;
+----
+0
+
+# start_id begins the tour at a chosen vertex. A cycle can be entered anywhere,
+# so the total is unchanged.
+query I
+SELECT node FROM duckrouting_tsp('SELECT start_vid, end_vid, agg_cost FROM matrix', 10) WHERE seq = 1;
+----
+10
+
+query R
+SELECT max(agg_cost) FROM duckrouting_tsp('SELECT start_vid, end_vid, agg_cost FROM matrix', 10);
+----
+6
+
+# Every step of the tour must cost what the matrix says it does.
+query I
+SELECT count(*) FROM (
+  SELECT t.node, t.cost, lag(t.node) OVER (ORDER BY t.seq) AS previous
+  FROM duckrouting_tsp('SELECT start_vid, end_vid, agg_cost FROM matrix') t
+) s JOIN matrix m ON m.start_vid = s.previous AND m.end_vid = s.node
+WHERE abs(m.agg_cost - s.cost) > 1e-9;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_tsp_euclidean
+# ---------------------------------------------------------------------------
+
+# The four corners of a unit square: the optimal tour is the perimeter, 4.
+query IIRR
+SELECT * FROM duckrouting_tsp_euclidean(
+  'SELECT * FROM (VALUES (1,0.0,0.0),(2,1.0,0.0),(3,1.0,1.0),(4,0.0,1.0)) t(id,x,y)');
+----
+1	1	0	0
+2	2	1	1
+3	3	1	2
+4	4	1	3
+5	1	1	4
+
+# Distances really are Euclidean.
+query R
+SELECT round(max(agg_cost), 6) FROM duckrouting_tsp_euclidean(
+  'SELECT * FROM (VALUES (1,0.0,0.0),(2,3.0,4.0)) t(id,x,y)');
+----
+10
+
+# start_id works here too.
+query I
+SELECT node FROM duckrouting_tsp_euclidean(
+  'SELECT * FROM (VALUES (1,0.0,0.0),(2,1.0,0.0),(3,1.0,1.0),(4,0.0,1.0)) t(id,x,y)', 3)
+WHERE seq = 1;
+----
+3
+
+# A single point is a degenerate but valid tour.
+query IIRR
+SELECT * FROM duckrouting_tsp_euclidean('SELECT * FROM (VALUES (7,1.0,1.0)) t(id,x,y)');
+----
+1	7	0	0
+
+# ---------------------------------------------------------------------------
+# Input validation
+# ---------------------------------------------------------------------------
+
+statement error
+SELECT * FROM duckrouting_tsp('SELECT start_vid, end_vid FROM matrix');
+----
+must expose a 'agg_cost' column
+
+statement error
+SELECT * FROM duckrouting_tsp_euclidean('SELECT * FROM (VALUES (1,0.0)) t(id,x)');
+----
+must expose a 'y' column

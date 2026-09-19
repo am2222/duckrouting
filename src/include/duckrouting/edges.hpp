@@ -87,4 +87,24 @@ struct CoordinateEdgeRow {
 std::vector<CoordinateEdgeRow> LoadCoordinateEdges(duckdb::ClientContext &context,
                                                    const std::string &edges_sql);
 
+//! One cell of a cost matrix, as produced by the *CostMatrix functions.
+struct MatrixCell {
+	int64_t start_vid;
+	int64_t end_vid;
+	double agg_cost;
+};
+
+//! Reads a query exposing start_vid, end_vid and agg_cost.
+std::vector<MatrixCell> LoadCostMatrix(duckdb::ClientContext &context, const std::string &matrix_sql);
+
+//! A placed vertex, for the Euclidean travelling-salesman variant.
+struct PlacedPoint {
+	int64_t id;
+	double x;
+	double y;
+};
+
+//! Reads a query exposing id, x and y.
+std::vector<PlacedPoint> LoadPoints(duckdb::ClientContext &context, const std::string &points_sql);
+
 } // namespace duckrouting

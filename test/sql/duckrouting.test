@@ -77,3 +77,5 @@ duckrouting_stoer_wagner	1
 duckrouting_strong_components	1
 duckrouting_topological_sort	1
 duckrouting_transitive_closure	1
+duckrouting_tsp	3
+duckrouting_tsp_euclidean	3

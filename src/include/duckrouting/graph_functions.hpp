@@ -230,6 +230,27 @@ std::vector<PathRow> AStar(const std::vector<CoordinateEdgeRow> &edges, const st
 std::vector<CostRow> AStarCost(const std::vector<CoordinateEdgeRow> &edges, const std::vector<int64_t> &starts,
                                const std::vector<int64_t> &ends, const AStarOptions &options);
 
+//! One stop on a travelling-salesman tour. `cost` is the cost of *arriving*
+//! here from the previous stop, which is the opposite convention from the
+//! path functions, and is what pgRouting reports.
+struct TourRow {
+	int64_t node;
+	double cost;
+	double agg_cost;
+};
+
+//! An approximate shortest tour visiting every vertex once and returning to the
+//! start, from a cost matrix. Uses Boost's metric_tsp_approx, which guarantees
+//! a tour at most twice the optimum when the costs obey the triangle
+//! inequality.
+std::vector<TourRow> Tsp(const std::vector<MatrixCell> &matrix, int64_t start_id, int64_t end_id);
+
+//! The same, with distances computed from coordinates instead.
+std::vector<TourRow> TspEuclidean(const std::vector<PlacedPoint> &points, int64_t start_id, int64_t end_id);
+
+duckdb::TableFunctionSet GetTspFunction();
+duckdb::TableFunctionSet GetTspEuclideanFunction();
+
 duckdb::TableFunctionSet GetAStarFunction();
 duckdb::TableFunctionSet GetAStarCostFunction();
 duckdb::TableFunctionSet GetAStarCostMatrixFunction();

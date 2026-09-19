@@ -255,4 +255,88 @@ std::vector<CoordinateEdgeRow> LoadCoordinateEdges(ClientContext &context, const
 	return edges;
 }
 
+std::vector<MatrixCell> LoadCostMatrix(ClientContext &context, const string &matrix_sql) {
+	Connection connection(DatabaseInstance::GetDatabase(context));
+
+	auto prepared = connection.Prepare("SELECT * FROM (" + matrix_sql + ") AS __duckrouting_matrix");
+	if (prepared->HasError()) {
+		throw BinderException("duckrouting: could not prepare the matrix query: %s", prepared->GetError());
+	}
+	auto &names = prepared->GetNames();
+	RequireColumn(names, "start_vid");
+	RequireColumn(names, "end_vid");
+	RequireColumn(names, "agg_cost");
+
+	auto result = connection.Query("SELECT CAST(start_vid AS BIGINT) AS start_vid, "
+	                               "CAST(end_vid AS BIGINT) AS end_vid, CAST(agg_cost AS DOUBLE) AS agg_cost "
+	                               "FROM (" +
+	                               matrix_sql + ") AS __duckrouting_matrix");
+	if (result->HasError()) {
+		throw InvalidInputException("duckrouting: the matrix query failed: %s", result->GetError());
+	}
+
+	std::vector<MatrixCell> cells;
+	while (true) {
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+		chunk->Flatten();
+		auto starts = FlatVector::GetData<int64_t>(chunk->data[0]);
+		auto ends = FlatVector::GetData<int64_t>(chunk->data[1]);
+		auto costs = FlatVector::GetData<double>(chunk->data[2]);
+		for (duckdb::idx_t row = 0; row < chunk->size(); row++) {
+			for (duckdb::idx_t col = 0; col < 3; col++) {
+				if (!FlatVector::Validity(chunk->data[col]).RowIsValid(row)) {
+					throw InvalidInputException(
+					    "duckrouting: the matrix query returned NULL in start_vid, end_vid or agg_cost");
+				}
+			}
+			cells.push_back(MatrixCell {starts[row], ends[row], costs[row]});
+		}
+	}
+	return cells;
+}
+
+std::vector<PlacedPoint> LoadPoints(ClientContext &context, const string &points_sql) {
+	Connection connection(DatabaseInstance::GetDatabase(context));
+
+	auto prepared = connection.Prepare("SELECT * FROM (" + points_sql + ") AS __duckrouting_points");
+	if (prepared->HasError()) {
+		throw BinderException("duckrouting: could not prepare the coordinates query: %s", prepared->GetError());
+	}
+	auto &names = prepared->GetNames();
+	RequireColumn(names, "id");
+	RequireColumn(names, "x");
+	RequireColumn(names, "y");
+
+	auto result = connection.Query("SELECT CAST(id AS BIGINT) AS id, CAST(x AS DOUBLE) AS x, "
+	                               "CAST(y AS DOUBLE) AS y FROM (" +
+	                               points_sql + ") AS __duckrouting_points");
+	if (result->HasError()) {
+		throw InvalidInputException("duckrouting: the coordinates query failed: %s", result->GetError());
+	}
+
+	std::vector<PlacedPoint> points;
+	while (true) {
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+		chunk->Flatten();
+		auto ids = FlatVector::GetData<int64_t>(chunk->data[0]);
+		auto xs = FlatVector::GetData<double>(chunk->data[1]);
+		auto ys = FlatVector::GetData<double>(chunk->data[2]);
+		for (duckdb::idx_t row = 0; row < chunk->size(); row++) {
+			for (duckdb::idx_t col = 0; col < 3; col++) {
+				if (!FlatVector::Validity(chunk->data[col]).RowIsValid(row)) {
+					throw InvalidInputException("duckrouting: the coordinates query returned NULL in id, x or y");
+				}
+			}
+			points.push_back(PlacedPoint {ids[row], xs[row], ys[row]});
+		}
+	}
+	return points;
+}
+
 } // namespace duckrouting

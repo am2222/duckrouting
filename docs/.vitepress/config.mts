@@ -39,7 +39,8 @@ export default defineConfig({
           { text: 'Spanning trees', link: '/functions/spanning-trees' },
           { text: 'Traversal & ordering', link: '/functions/traversal' },
           { text: 'Graph analysis', link: '/functions/analysis' },
-          { text: 'Maximum flow', link: '/functions/flow' }
+          { text: 'Maximum flow', link: '/functions/flow' },
+          { text: 'Travelling salesman', link: '/functions/tsp' }
         ]
       },
       {

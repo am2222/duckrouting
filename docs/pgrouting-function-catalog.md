@@ -82,7 +82,8 @@ wrappers is unencumbered.
 | `pgr_topologicalSort` | `topological_sort` | `duckrouting_topological_sort` |
 | `pgr_isPlanar` | `boyer_myrvold_planarity_test` | `duckrouting_is_planar` |
 | `pgr_boyerMyrvold` | `boyer_myrvold_planarity_test` (embedding) | `duckrouting_boyer_myrvold` |
-| `pgr_TSP`, `pgr_TSPeuclidean` | `metric_tsp_approx_tour` | |
+| `pgr_TSP` | `metric_tsp_approx_tour` | `duckrouting_tsp` |
+| `pgr_TSPeuclidean` | `metric_tsp_approx_tour` | `duckrouting_tsp_euclidean` |
 | `pgr_contractionHierarchies` | `dijkstra_shortest_paths` over a CH `adjacency_list` | |
 
 ## Group 2 -- pgRouting's own algorithm
@@ -138,6 +139,13 @@ pgRouting's q93 and q133 ask for `12 -> 7` undirected. Two paths cost exactly
 equal-cost path wins, so this is not a defect in either implementation. The
 tests assert hop count, endpoints and total cost for those cases, plus a check
 that every reported edge really connects its two reported nodes.
+
+**TSP** is the one family that is explicitly *approximate*: `metric_tsp_approx`
+guarantees a tour at most twice the optimum when the costs obey the triangle
+inequality, not the optimum itself. It also reverses the usual convention --
+`cost` is the cost of *arriving* at a stop, so the first row is 0. Fed
+pgRouting's own `dijkstraCostMatrix` it reproduces their published tour
+exactly: `5, 6, 10, 15, 5` costing 6.
 
 **A\*** introduces a third edges contract: it needs `x1, y1, x2, y2` so the
 heuristic can estimate the distance still to cover. All six of pgRouting's
