@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckrouting/dijkstra.hpp"
+#include "duckrouting/graph_functions.hpp"
 
 #include <boost/version.hpp>
 
@@ -32,6 +33,15 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetDijkstraNearFunction());
 	loader.RegisterFunction(duckrouting::GetDijkstraNearCostFunction());
 	loader.RegisterFunction(duckrouting::GetKspFunction());
+
+	loader.RegisterFunction(duckrouting::GetFloydWarshallFunction());
+	loader.RegisterFunction(duckrouting::GetJohnsonFunction());
+	loader.RegisterFunction(duckrouting::GetConnectedComponentsFunction());
+	loader.RegisterFunction(duckrouting::GetStrongComponentsFunction());
+	loader.RegisterFunction(duckrouting::GetBiconnectedComponentsFunction());
+	loader.RegisterFunction(duckrouting::GetArticulationPointsFunction());
+	loader.RegisterFunction(duckrouting::GetBridgesFunction());
+	loader.RegisterFunction(duckrouting::GetMakeConnectedFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

@@ -41,14 +41,16 @@ wrappers is unencumbered.
 | `pgr_drivingDistance` | `dijkstra_shortest_paths` + visitor | `duckrouting_driving_distance` |
 | `pgr_withPointsDD` | `dijkstra_shortest_paths` + visitor | not yet |
 | `pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix` | `astar_search` | |
-| `pgr_floydWarshall` | `floyd_warshall_all_pairs_shortest_paths` | |
-| `pgr_johnson` | `johnson_all_pairs_shortest_paths` | |
+| `pgr_floydWarshall` | `floyd_warshall_all_pairs_shortest_paths` | `duckrouting_floyd_warshall` |
+| `pgr_johnson` | `johnson_all_pairs_shortest_paths` | `duckrouting_johnson` |
 | `pgr_bellmanFord`, `pgr_bellmanFord` (neg) | `bellman_ford_shortest_paths` | |
 | `pgr_dagShortestPath` | `dag_shortest_paths` | |
-| `pgr_connectedComponents` | `connected_components` | |
-| `pgr_strongComponents` | `strong_components` | |
-| `pgr_biconnectedComponents`, `pgr_articulationPoints`, `pgr_bridges` | `biconnected_components` | |
-| `pgr_makeConnected` | `make_connected` | |
+| `pgr_connectedComponents` | `connected_components` | `duckrouting_connected_components` |
+| `pgr_strongComponents` | `strong_components` | `duckrouting_strong_components` |
+| `pgr_biconnectedComponents` | `biconnected_components` | `duckrouting_biconnected_components` |
+| `pgr_articulationPoints` | `articulation_points` | `duckrouting_articulation_points` |
+| `pgr_bridges` | single-edge `biconnected_components` | `duckrouting_bridges` |
+| `pgr_makeConnected` | `make_connected` | `duckrouting_make_connected` |
 | `pgr_kruskal`, `pgr_kruskalBFS`, `pgr_kruskalDD`, `pgr_kruskalDFS` | `kruskal_minimum_spanning_tree` | |
 | `pgr_prim`, `pgr_primBFS`, `pgr_primDD`, `pgr_primDFS` | `prim_minimum_spanning_tree` | |
 | `pgr_breadthFirstSearch` | `breadth_first_search` | |
@@ -129,6 +131,12 @@ pgRouting's q93 and q133 ask for `12 -> 7` undirected. Two paths cost exactly
 equal-cost path wins, so this is not a defect in either implementation. The
 tests assert hop count, endpoints and total cost for those cases, plus a check
 that every reported edge really connects its two reported nodes.
+
+`duckrouting_make_connected` differs the same way: joining n components takes
+n-1 edges, but *which* vertex stands for each component is Boost's choice and
+follows vertex ordering. pgRouting reports `(5,2)` and `(4,13)`; we report
+`(9,2)` and `(4,13)`. Both genuinely connect the graph, so the tests assert the
+count and that each pair really spans two different components.
 
 The same thing happens in `duckrouting_ksp`: for `6 -> 17` with `k = 2`, both
 paths cost 4 and pgRouting reports them in the opposite order. The tests assert

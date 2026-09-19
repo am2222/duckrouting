@@ -23,6 +23,10 @@ SELECT function_name, count(*) FROM duckdb_functions()
 WHERE function_name LIKE 'duckrouting_%' AND function_type = 'table'
 GROUP BY function_name ORDER BY function_name;
 ----
+duckrouting_articulation_points	1
+duckrouting_biconnected_components	1
+duckrouting_bridges	1
+duckrouting_connected_components	1
 duckrouting_dijkstra	8
 duckrouting_dijkstra_cost	8
 duckrouting_dijkstra_cost_matrix	2
@@ -30,4 +34,8 @@ duckrouting_dijkstra_near	8
 duckrouting_dijkstra_near_cost	8
 duckrouting_dijkstra_via	4
 duckrouting_driving_distance	4
+duckrouting_floyd_warshall	2
+duckrouting_johnson	2
 duckrouting_ksp	8
+duckrouting_make_connected	1
+duckrouting_strong_components	1

@@ -22,7 +22,8 @@ set(EXTENSION_SOURCES
     src/edges.cpp
     src/dijkstra.cpp
     src/functions.cpp
-    src/yen.cpp)
+    src/yen.cpp
+    src/graph_functions.cpp)
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})

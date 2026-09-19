@@ -47,6 +47,11 @@ inline bool IsTraversable(double cost) {
 
 //! Runs `edges_sql` and projects it onto the columns pgRouting requires:
 //! id, source, target, cost, and the optional reverse_cost.
-std::vector<EdgeRow> LoadEdges(duckdb::ClientContext &context, const std::string &edges_sql);
+//!
+//! A few functions never report an edge back -- pgRouting's johnson and
+//! floydWarshall are documented with `SELECT source, target, cost` -- so `id`
+//! can be made optional, in which case row numbers stand in for it.
+std::vector<EdgeRow> LoadEdges(duckdb::ClientContext &context, const std::string &edges_sql,
+                               bool require_id = true);
 
 } // namespace duckrouting
