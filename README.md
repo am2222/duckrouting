@@ -78,8 +78,12 @@ Three geometry helpers — `find_close_edges`, `separate_crossing`,
 `separate_touching` — are SQL macros over DuckDB's `spatial` extension. Run
 `INSTALL spatial; LOAD spatial;` before calling one; nothing else needs it.
 
-Not implemented: `pgr_pickDeliver`, `pgr_pickDeliverEuclidean` and
-`pgr_vrpOneDepot` — vehicle routing with capacities and time windows.
+**Not implemented by choice:** `pgr_pickDeliver`, `pgr_pickDeliverEuclidean` and
+`pgr_vrpOneDepot` — vehicle routing with capacities and time windows. Matching
+pgRouting here would mean vendoring its GPL-2.0-or-later VRP source, which would
+relicense this extension as a whole and close the door on anyone embedding it in
+a commercial product. Three functions out of 93 is not worth that. See the
+[catalog](docs/pgrouting-function-catalog.md) for the reasoning.
 
 ## How results are verified
 

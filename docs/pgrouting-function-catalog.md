@@ -21,10 +21,38 @@ below is the one that matters for porting:
 
 ## Licensing
 
-pgRouting is **GPL-2.0-or-later**. Group 2 source cannot be lifted into a
-permissively-licensed extension -- those need clean-room reimplementation.
-Group 1 is mostly glue over Boost, which is BSL-1.0, so writing our own
-wrappers is unencumbered.
+pgRouting is **GPL-2.0-or-later**; duckrouting is MIT. That asymmetry decides
+what can be ported and how.
+
+Group 1 is mostly glue over Boost, which is BSL-1.0, so writing fresh wrappers
+is unencumbered. Group 2 is pgRouting's own code, so each function there was
+reimplemented from the published algorithm rather than ported -- Yen's for
+`ksp`, Hierholzer's for `chinese_postman`, a bidirectional meet-in-the-middle
+for `bd_dijkstra`, and so on.
+
+### The three that were left out
+
+`pgr_pickDeliver`, `pgr_pickDeliverEuclidean` and `pgr_vrpOneDepot` are vehicle
+routing with capacities, time windows and pickup-delivery pairing -- about 5,400
+lines across 27 files in pgRouting, and not one published algorithm but a stack
+of construction and local-search heuristics.
+
+They were deliberately not implemented:
+
+- **Vendoring pgRouting's source** would work, but GPL-2 section 2b requires the
+  distributed work to be licensed *as a whole* under GPL. One binary cannot be
+  MIT for 90 functions and GPL for three. It would relicense the entire
+  extension and stop anyone embedding it in a commercial product.
+- **A separate GPL extension** (`duckrouting_vrp`) would be the correct
+  structure if this were wanted -- two binaries, no linking between them, MIT
+  code is free to move into the GPL one. The cost is a second extension to
+  build, test, publish and keep in step with DuckDB.
+- **Clean-room implementation** would keep MIT but loses the thing that makes
+  the rest of this project checkable: route *quality* cannot be verified against
+  pgRouting the way a shortest path can. A mediocre VRP heuristic is
+  indistinguishable from a good one without a benchmark.
+
+Three functions out of 93 did not justify any of those costs.
 
 ---
 
