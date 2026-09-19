@@ -34,7 +34,8 @@ void RequireColumn(const duckdb::vector<string> &names, const char *wanted) {
 
 } // namespace
 
-std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql, bool require_id) {
+std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql, bool require_id,
+                               bool require_cost) {
 	Connection connection(DatabaseInstance::GetDatabase(context));
 
 	// Prepare (but do not run) the user's query so we can inspect its columns
@@ -52,7 +53,11 @@ std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql, 
 	}
 	RequireColumn(names, "source");
 	RequireColumn(names, "target");
-	RequireColumn(names, "cost");
+	// A couple of structural functions only ever look at the endpoints.
+	const bool has_cost = HasColumn(names, "cost");
+	if (require_cost && !has_cost) {
+		RequireColumn(names, "cost");
+	}
 	const bool has_reverse_cost = HasColumn(names, "reverse_cost");
 
 	// Let DuckDB do the type coercion, so any numeric input type works.
@@ -60,8 +65,8 @@ std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql, 
 	// Functions that never report an edge back may omit `id`; a row number
 	// stands in so the rest of the pipeline is unchanged.
 	projection += has_id ? "CAST(id AS BIGINT) AS id, " : "CAST(row_number() OVER () AS BIGINT) AS id, ";
-	projection += "CAST(source AS BIGINT) AS source, "
-	              "CAST(target AS BIGINT) AS target, CAST(cost AS DOUBLE) AS cost, ";
+	projection += "CAST(source AS BIGINT) AS source, CAST(target AS BIGINT) AS target, ";
+	projection += has_cost ? "CAST(cost AS DOUBLE) AS cost, " : "CAST(1 AS DOUBLE) AS cost, ";
 	projection += has_reverse_cost ? "CAST(reverse_cost AS DOUBLE) AS reverse_cost " : "CAST(-1 AS DOUBLE) AS reverse_cost ";
 	projection += "FROM (" + edges_sql + ") AS __duckrouting_edges";
 

@@ -276,6 +276,64 @@ std::vector<DrivingDistanceRow> WithPointsDrivingDistance(const std::vector<Edge
                                                           const std::vector<int64_t> &starts, double distance,
                                                           char driving_side, bool directed, bool details);
 
+//! A vertex with the edges entering and leaving it.
+struct VertexEdgesRow {
+	int64_t id;
+	std::vector<int64_t> in_edges;
+	std::vector<int64_t> out_edges;
+};
+
+//! A vertex and how many edges touch it.
+struct DegreeRow {
+	int64_t node;
+	int64_t degree;
+};
+
+//! Derives the vertex table implied by an edges query.
+std::vector<VertexEdgesRow> ExtractVertices(const std::vector<EdgeRow> &edges);
+
+//! Counts the edges incident on each vertex.
+std::vector<DegreeRow> Degree(const std::vector<EdgeRow> &edges);
+
+//! Bidirectional Dijkstra: searches forward from the start and backward from
+//! the end at the same time, stopping when the two frontiers meet. Same answer
+//! as Dijkstra, reached by exploring less of the graph. Not a Boost algorithm.
+std::vector<PathRow> BidirectionalDijkstra(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                           const std::vector<int64_t> &ends, bool directed);
+std::vector<CostRow> BidirectionalDijkstraCost(const std::vector<EdgeRow> &edges,
+                                               const std::vector<int64_t> &starts,
+                                               const std::vector<int64_t> &ends, bool directed);
+
+//! The same, with each frontier guided by a heuristic.
+std::vector<PathRow> BidirectionalAStar(const std::vector<CoordinateEdgeRow> &edges,
+                                        const std::vector<int64_t> &starts, const std::vector<int64_t> &ends,
+                                        const AStarOptions &options);
+std::vector<CostRow> BidirectionalAStarCost(const std::vector<CoordinateEdgeRow> &edges,
+                                            const std::vector<int64_t> &starts,
+                                            const std::vector<int64_t> &ends, const AStarOptions &options);
+
+//! Edward Moore's shortest path, better known as SPFA: a queue-based
+//! Bellman-Ford refinement. Not a Boost algorithm.
+std::vector<PathRow> EdwardMoore(const std::vector<EdgeRow> &edges, const std::vector<int64_t> &starts,
+                                 const std::vector<int64_t> &ends, bool directed);
+
+//! 0-1 BFS: a deque-based shortest path for graphs whose edges cost 0 or 1.
+std::vector<PathRow> BinaryBreadthFirstSearch(const std::vector<EdgeRow> &edges,
+                                              const std::vector<int64_t> &starts,
+                                              const std::vector<int64_t> &ends, bool directed);
+
+duckdb::TableFunctionSet GetExtractVerticesFunction();
+duckdb::TableFunctionSet GetDegreeFunction();
+duckdb::TableFunctionSet GetBdDijkstraFunction();
+duckdb::TableFunctionSet GetBdDijkstraCostFunction();
+duckdb::TableFunctionSet GetBdDijkstraCostMatrixFunction();
+duckdb::TableFunctionSet GetBdAStarFunction();
+duckdb::TableFunctionSet GetBdAStarCostFunction();
+duckdb::TableFunctionSet GetBdAStarCostMatrixFunction();
+duckdb::TableFunctionSet GetEdwardMooreFunction();
+duckdb::TableFunctionSet GetBinaryBreadthFirstSearchFunction();
+duckdb::TableFunctionSet GetFullVersionFunction();
+
 duckdb::TableFunctionSet GetContractionHierarchiesFunction();
 duckdb::TableFunctionSet GetWithPointsDDFunction();
 

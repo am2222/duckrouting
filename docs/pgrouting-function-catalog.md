@@ -88,33 +88,31 @@ wrappers is unencumbered.
 
 ## Group 2 -- pgRouting's own algorithm
 
-| Function(s) | What it actually is |
-| --- | --- |
-| `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix` | `cpp_common/bidirectional.hpp` -- own `std::priority_queue` bidirectional search |
-| `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix` | same hand-written bidirectional base, plus a heuristic |
-| `pgr_KSP` | `include/yen/ksp.hpp` -- own Yen's algorithm. Reimplemented independently as `duckrouting_ksp`; Boost has no k-shortest-paths routine |
-| `pgr_withPointsKSP`, `pgr_turnRestrictedPath` | Yen over the withPoints / turn-restriction graphs |
-| `pgr_trsp`, `pgr_trspVia`, `pgr_trsp_withPoints`, `pgr_trspVia_withPoints` | `trsp/trspHandler.cpp` -- own turn-restriction search. Zero `boost::` symbols |
-| `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`, `pgr_withPointsVia` | own edge-splitting graph rewrite, then delegates |
-| `pgr_edwardMoore` | own SPFA; Boost only for edge iteration |
-| `pgr_binaryBreadthFirstSearch` | own 0-1 BFS; Boost only for edge iteration |
-| `pgr_chinesePostman`, `pgr_chinesePostmanCost` | own. Zero `boost::` symbols |
-| `pgr_lineGraph`, `pgr_lineGraphFull` | own line-graph construction |
-| `pgr_pickDeliver`, `pgr_pickDeliverEuclidean` | own VRPPDTW heuristic, 17 source files. Zero `boost::` symbols |
-| `pgr_vrpOneDepot` | own legacy VRP code |
-| `pgr_contraction`, `pgr_deadEndContraction`, `pgr_linearContraction` | own contraction operators applied to a `boost::adjacency_list` |
-
+| Function(s) | What it actually is | duckrouting |
+| --- | --- | --- |
+| `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix` | `cpp_common/bidirectional.hpp` -- own `std::priority_queue` bidirectional search | `duckrouting_bd_dijkstra`, `duckrouting_bd_dijkstra_cost`, `duckrouting_bd_dijkstra_cost_matrix` |
+| `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix` | same hand-written bidirectional base, plus a heuristic | `duckrouting_bd_astar`, `duckrouting_bd_astar_cost`, `duckrouting_bd_astar_cost_matrix` |
+| `pgr_KSP` | `include/yen/ksp.hpp` -- own Yen's algorithm. Reimplemented independently as `duckrouting_ksp`; Boost has no k-shortest-paths routine | `duckrouting_ksp` |
+| `pgr_withPointsKSP`, `pgr_turnRestrictedPath` | Yen over the withPoints / turn-restriction graphs |  |
+| `pgr_trsp`, `pgr_trspVia`, `pgr_trsp_withPoints`, `pgr_trspVia_withPoints` | `trsp/trspHandler.cpp` -- own turn-restriction search. Zero `boost::` symbols |  |
+| `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`, `pgr_withPointsVia` | own edge-splitting graph rewrite, then delegates |  |
+| `pgr_edwardMoore` | own SPFA; Boost only for edge iteration | `duckrouting_edward_moore` |
+| `pgr_binaryBreadthFirstSearch` | own 0-1 BFS; Boost only for edge iteration | `duckrouting_binary_breadth_first_search` |
+| `pgr_chinesePostman`, `pgr_chinesePostmanCost` | own. Zero `boost::` symbols |  |
+| `pgr_lineGraph`, `pgr_lineGraphFull` | own line-graph construction |  |
+| `pgr_pickDeliver`, `pgr_pickDeliverEuclidean` | own VRPPDTW heuristic, 17 source files. Zero `boost::` symbols |  |
+| `pgr_vrpOneDepot` | own legacy VRP code |  |
+| `pgr_contraction`, `pgr_deadEndContraction`, `pgr_linearContraction` | own contraction operators applied to a `boost::adjacency_list` |  |
 ## Group 3 -- no C++; pure SQL / PL-pgSQL
 
-| Function | Notes |
-| --- | --- |
-| `pgr_extractVertices` | derives a vertex table from edges |
-| `pgr_findCloseEdges` | needs PostGIS geometry predicates |
-| `pgr_separateCrossing` | needs PostGIS |
-| `pgr_separateTouching` | needs PostGIS |
-| `pgr_degree` | vertex degree over the edge table |
-| `pgr_version`, `pgr_full_version` | metadata |
-
+| Function | Notes | duckrouting |
+| --- | --- | --- |
+| `pgr_extractVertices` | derives a vertex table from edges | `duckrouting_extract_vertices` |
+| `pgr_findCloseEdges` | needs PostGIS geometry predicates |  |
+| `pgr_separateCrossing` | needs PostGIS |  |
+| `pgr_separateTouching` | needs PostGIS |  |
+| `pgr_degree` | vertex degree over the edge table | `duckrouting_degree` |
+| `pgr_version`, `pgr_full_version` | metadata | `duckrouting_version`, `duckrouting_full_version` |
 ## Tally
 
 | Group | Count |

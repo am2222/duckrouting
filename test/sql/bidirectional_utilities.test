@@ -1,0 +1,215 @@
+# name: test/sql/bidirectional_utilities.test
+# description: bidirectional search, SPFA, 0-1 BFS and the utility functions
+# group: [duckrouting]
+#
+# These are group 2 in the catalog: pgRouting implements them itself rather
+# than delegating to Boost, and so does duckrouting. They solve the same
+# problem as Dijkstra by different means, which makes agreement with
+# duckrouting_dijkstra the strongest available check.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE,
+                   x1 DOUBLE, y1 DOUBLE, x2 DOUBLE, y2 DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1, 2,0, 2,1),(2,6,10,-1,1, 2,1, 3,1),(3,10,15,-1,1, 3,1, 4,1),(4,6,7,1,1, 2,1, 2,2),
+ (5,10,11,1,-1, 3,1, 3,2),(6,1,3,1,1, 0,2, 1,2),(7,3,7,1,1, 1,2, 2,2),(8,7,11,1,1, 2,2, 3,2),
+ (9,11,16,1,1, 3,2, 4,2),(10,7,8,1,1, 2,2, 2,3),(11,11,12,1,-1, 3,2, 3,3),(12,8,12,1,-1, 2,3, 3,3),
+ (13,12,17,1,-1, 3,3, 4,3),(14,8,9,1,1, 2,3, 2,4),(15,16,17,1,1, 4,2, 4,3),(16,15,16,1,1, 4,1, 4,2),
+ (17,2,4,1,1, 0.5,3.5, 2,3.5),(18,13,14,1,1, 3.5,2.3, 3.5,4);
+
+# ---------------------------------------------------------------------------
+# duckrouting_bd_dijkstra -- pgRouting q2
+# ---------------------------------------------------------------------------
+
+query IIIIIIRR
+SELECT * FROM duckrouting_bd_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10, true);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	9	1	2
+4	4	6	10	16	16	1	3
+5	5	6	10	15	3	1	4
+6	6	6	10	10	-1	0	5
+
+# Searching from both ends must reach the same answer as searching from one.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_bd_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10,17])
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10,17])
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_bd_dijkstra_cost('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10], false)
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra_cost('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10], false)
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_bd_dijkstra_cost_matrix('SELECT id, source, target, cost, reverse_cost FROM edges', [5,6,10,15], false)
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra_cost_matrix('SELECT id, source, target, cost, reverse_cost FROM edges', [5,6,10,15], false)
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_bd_astar
+# ---------------------------------------------------------------------------
+
+query IIRR
+SELECT path_seq, node, cost, agg_cost
+FROM duckrouting_bd_astar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+                          6, 10, heuristic => 2);
+----
+1	6	1	0
+2	7	1	1
+3	11	1	2
+4	16	1	3
+5	15	1	4
+6	10	0	5
+
+# Guiding the search must not change the cost.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_bd_astar_cost('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+                                          [6,12], [7,10], heuristic => 4)
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra_cost('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10])
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_bd_astar_cost_matrix('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', [5,6,10,15], false)
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra_cost_matrix('SELECT id, source, target, cost, reverse_cost FROM edges', [5,6,10,15], false)
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_edward_moore -- pgRouting q2
+# ---------------------------------------------------------------------------
+
+query IIIIIIRR
+SELECT * FROM duckrouting_edward_moore('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10, true);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	9	1	2
+4	4	6	10	16	16	1	3
+5	5	6	10	15	3	1	4
+6	6	6	10	10	-1	0	5
+
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_edward_moore('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10,17])
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10,17])
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_binary_breadth_first_search
+# ---------------------------------------------------------------------------
+# 0-1 BFS is designed for graphs whose edges cost 0 or 1, which this one does.
+
+query I
+SELECT count(*) FROM (
+  SELECT * FROM duckrouting_binary_breadth_first_search('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10,17])
+  EXCEPT
+  SELECT * FROM duckrouting_dijkstra('SELECT id, source, target, cost, reverse_cost FROM edges', [6,12], [7,10,17])
+);
+----
+0
+
+# A zero-cost edge must be free to cross.
+query R
+SELECT max(agg_cost) FROM duckrouting_binary_breadth_first_search(
+  'SELECT * FROM (VALUES (1,1,2,0.0,0.0),(2,2,3,1.0,1.0)) t(id,source,target,cost,reverse_cost)', 1, 3);
+----
+1
+
+# ---------------------------------------------------------------------------
+# duckrouting_degree -- pgRouting q1
+# ---------------------------------------------------------------------------
+
+query II
+SELECT * FROM duckrouting_degree('SELECT id, source, target FROM edges') WHERE node <= 14 ORDER BY node;
+----
+1	1
+2	1
+3	2
+4	1
+5	1
+6	3
+7	4
+8	3
+9	1
+10	3
+11	4
+12	3
+13	1
+14	1
+
+# Degrees must add up to twice the number of edges.
+query I
+SELECT count(*) FROM (SELECT sum(degree) AS total FROM duckrouting_degree('SELECT id, source, target FROM edges'))
+WHERE total <> 36;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_extract_vertices -- pgRouting q1
+# ---------------------------------------------------------------------------
+
+query ITT
+SELECT * FROM duckrouting_extract_vertices('SELECT id, source, target FROM edges')
+WHERE id IN (1, 6, 7, 9) ORDER BY id;
+----
+1	[]	[6]
+6	[1]	[2, 4]
+7	[4, 7]	[8, 10]
+9	[14]	[]
+
+# Every vertex mentioned by an edge appears exactly once.
+query I
+SELECT count(*) FROM duckrouting_extract_vertices('SELECT id, source, target FROM edges');
+----
+17
+
+# in_edges and out_edges together account for every endpoint of every edge.
+query I
+SELECT count(*) FROM (
+  SELECT sum(len(in_edges)) + sum(len(out_edges)) AS total
+  FROM duckrouting_extract_vertices('SELECT id, source, target FROM edges')
+) WHERE total <> 36;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_full_version
+# ---------------------------------------------------------------------------
+
+query I
+SELECT count(*) FROM duckrouting_full_version();
+----
+1
+
+query I
+SELECT boost <> '' AND compiler <> '' FROM duckrouting_full_version();
+----
+true

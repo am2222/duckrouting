@@ -52,7 +52,7 @@ inline bool IsTraversable(double cost) {
 //! floydWarshall are documented with `SELECT source, target, cost` -- so `id`
 //! can be made optional, in which case row numbers stand in for it.
 std::vector<EdgeRow> LoadEdges(duckdb::ClientContext &context, const std::string &edges_sql,
-                               bool require_id = true);
+                               bool require_id = true, bool require_cost = true);
 
 //! One row of a flow query. The flow functions want capacities rather than
 //! costs, and the min-cost variant wants both. A negative or missing value

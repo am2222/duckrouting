@@ -91,6 +91,18 @@ static void LoadInternal(ExtensionLoader &loader) {
 
 	loader.RegisterFunction(duckrouting::GetContractionHierarchiesFunction());
 	loader.RegisterFunction(duckrouting::GetWithPointsDDFunction());
+
+	loader.RegisterFunction(duckrouting::GetBdDijkstraFunction());
+	loader.RegisterFunction(duckrouting::GetBdDijkstraCostFunction());
+	loader.RegisterFunction(duckrouting::GetBdDijkstraCostMatrixFunction());
+	loader.RegisterFunction(duckrouting::GetBdAStarFunction());
+	loader.RegisterFunction(duckrouting::GetBdAStarCostFunction());
+	loader.RegisterFunction(duckrouting::GetBdAStarCostMatrixFunction());
+	loader.RegisterFunction(duckrouting::GetEdwardMooreFunction());
+	loader.RegisterFunction(duckrouting::GetBinaryBreadthFirstSearchFunction());
+	loader.RegisterFunction(duckrouting::GetExtractVerticesFunction());
+	loader.RegisterFunction(duckrouting::GetDegreeFunction());
+	loader.RegisterFunction(duckrouting::GetFullVersionFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

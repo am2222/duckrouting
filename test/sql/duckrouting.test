@@ -28,9 +28,16 @@ duckrouting_astar	8
 duckrouting_astar_cost	8
 duckrouting_astar_cost_matrix	2
 duckrouting_bandwidth	1
+duckrouting_bd_astar	8
+duckrouting_bd_astar_cost	8
+duckrouting_bd_astar_cost_matrix	2
+duckrouting_bd_dijkstra	8
+duckrouting_bd_dijkstra_cost	8
+duckrouting_bd_dijkstra_cost_matrix	2
 duckrouting_bellman_ford	8
 duckrouting_betweenness_centrality	2
 duckrouting_biconnected_components	1
+duckrouting_binary_breadth_first_search	8
 duckrouting_bipartite	1
 duckrouting_boyer_myrvold	1
 duckrouting_boykov_kolmogorov	4
@@ -40,6 +47,7 @@ duckrouting_connected_components	1
 duckrouting_contraction_hierarchies	2
 duckrouting_cuthill_mckee_ordering	1
 duckrouting_dag_shortest_path	4
+duckrouting_degree	1
 duckrouting_depth_first_search	4
 duckrouting_dijkstra	8
 duckrouting_dijkstra_cost	8
@@ -52,7 +60,10 @@ duckrouting_driving_distance	4
 duckrouting_edge_coloring	1
 duckrouting_edge_disjoint_paths	8
 duckrouting_edmonds_karp	4
+duckrouting_edward_moore	8
+duckrouting_extract_vertices	1
 duckrouting_floyd_warshall	2
+duckrouting_full_version	1
 duckrouting_hawick_circuits	1
 duckrouting_is_planar	1
 duckrouting_johnson	2
