@@ -170,6 +170,47 @@ std::vector<CircuitRow> HawickCircuits(const std::vector<EdgeRow> &edges);
 //! Immediate dominator of each vertex, relative to `root`.
 std::vector<DominatorRow> DominatorTree(const std::vector<EdgeRow> &edges, int64_t root);
 
+//! One edge carrying flow.
+struct FlowRow {
+	int64_t edge;
+	int64_t start_vid;
+	int64_t end_vid;
+	double flow;
+	double residual_capacity;
+	double cost;
+	double agg_cost;
+};
+
+//! Which max-flow algorithm to run. They compute the same maximum, but not
+//! necessarily the same distribution of flow across the edges.
+enum class FlowAlgorithm { PushRelabel, EdmondsKarp, BoykovKolmogorov, MinCost };
+
+//! Maximum flow from `sources` to `sinks`, edge by edge. Only edges actually
+//! carrying flow are reported.
+std::vector<FlowRow> MaxFlow(const std::vector<FlowEdgeRow> &edges, const std::vector<int64_t> &sources,
+                             const std::vector<int64_t> &sinks, FlowAlgorithm algorithm);
+
+//! The total flow value alone.
+double MaxFlowValue(const std::vector<FlowEdgeRow> &edges, const std::vector<int64_t> &sources,
+                    const std::vector<int64_t> &sinks, FlowAlgorithm algorithm);
+
+//! Edge-disjoint paths between the given vertices, found by running a unit
+//! capacity flow and decomposing it back into paths.
+std::vector<PathRow> EdgeDisjointPaths(const std::vector<FlowEdgeRow> &edges, const std::vector<int64_t> &starts,
+                                       const std::vector<int64_t> &ends, bool directed);
+
+//! A maximum matching: as many edges as possible, no two sharing a vertex.
+std::vector<IdentifierRow> MaxCardinalityMatch(const std::vector<FlowEdgeRow> &edges);
+
+duckdb::TableFunctionSet GetMaxFlowFunction();
+duckdb::TableFunctionSet GetPushRelabelFunction();
+duckdb::TableFunctionSet GetEdmondsKarpFunction();
+duckdb::TableFunctionSet GetBoykovKolmogorovFunction();
+duckdb::TableFunctionSet GetMaxFlowMinCostFunction();
+duckdb::TableFunctionSet GetMaxFlowMinCostCostFunction();
+duckdb::TableFunctionSet GetEdgeDisjointPathsFunction();
+duckdb::TableFunctionSet GetMaxCardinalityMatchFunction();
+
 duckdb::TableFunctionSet GetSequentialVertexColoringFunction();
 duckdb::TableFunctionSet GetEdgeColoringFunction();
 duckdb::TableFunctionSet GetBipartiteFunction();

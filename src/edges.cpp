@@ -106,4 +106,74 @@ std::vector<EdgeRow> LoadEdges(ClientContext &context, const string &edges_sql, 
 	return edges;
 }
 
+std::vector<FlowEdgeRow> LoadFlowEdges(ClientContext &context, const string &edges_sql, bool require_capacity,
+                                       bool require_cost) {
+	Connection connection(DatabaseInstance::GetDatabase(context));
+
+	const string wrapped = "SELECT * FROM (" + edges_sql + ") AS __duckrouting_edges";
+	auto prepared = connection.Prepare(wrapped);
+	if (prepared->HasError()) {
+		throw BinderException("duckrouting: could not prepare the edges query: %s", prepared->GetError());
+	}
+
+	auto &names = prepared->GetNames();
+	RequireColumn(names, "id");
+	RequireColumn(names, "source");
+	RequireColumn(names, "target");
+	if (require_capacity) {
+		RequireColumn(names, "capacity");
+	}
+	if (require_cost) {
+		RequireColumn(names, "cost");
+	}
+
+	// Absent optional columns become -1, which every caller reads as "this
+	// direction is unusable".
+	auto column = [&](const char *name) -> string {
+		return HasColumn(names, name) ? "CAST(" + string(name) + " AS DOUBLE)" : "CAST(-1 AS DOUBLE)";
+	};
+	string projection = "SELECT CAST(id AS BIGINT) AS id, CAST(source AS BIGINT) AS source, "
+	                    "CAST(target AS BIGINT) AS target, " +
+	                    column("capacity") + " AS capacity, " + column("reverse_capacity") +
+	                    " AS reverse_capacity, " + column("cost") + " AS cost, " + column("reverse_cost") +
+	                    " AS reverse_cost FROM (" + edges_sql + ") AS __duckrouting_edges";
+
+	auto result = connection.Query(projection);
+	if (result->HasError()) {
+		throw InvalidInputException("duckrouting: the edges query failed: %s", result->GetError());
+	}
+
+	std::vector<FlowEdgeRow> edges;
+	while (true) {
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+		chunk->Flatten();
+		auto ids = FlatVector::GetData<int64_t>(chunk->data[0]);
+		auto sources = FlatVector::GetData<int64_t>(chunk->data[1]);
+		auto targets = FlatVector::GetData<int64_t>(chunk->data[2]);
+		auto capacities = FlatVector::GetData<double>(chunk->data[3]);
+		auto reverse_capacities = FlatVector::GetData<double>(chunk->data[4]);
+		auto costs = FlatVector::GetData<double>(chunk->data[5]);
+		auto reverse_costs = FlatVector::GetData<double>(chunk->data[6]);
+
+		for (duckdb::idx_t row = 0; row < chunk->size(); row++) {
+			if (!FlatVector::Validity(chunk->data[0]).RowIsValid(row) ||
+			    !FlatVector::Validity(chunk->data[1]).RowIsValid(row) ||
+			    !FlatVector::Validity(chunk->data[2]).RowIsValid(row)) {
+				throw InvalidInputException("duckrouting: the edges query returned NULL in id, source or target");
+			}
+			// A NULL in any optional column means the same as a negative one.
+			auto value = [&](duckdb::idx_t col, const double *data) {
+				return FlatVector::Validity(chunk->data[col]).RowIsValid(row) ? data[row] : -1.0;
+			};
+			edges.push_back(FlowEdgeRow {ids[row], sources[row], targets[row], value(3, capacities),
+			                             value(4, reverse_capacities), value(5, costs),
+			                             value(6, reverse_costs)});
+		}
+	}
+	return edges;
+}
+
 } // namespace duckrouting

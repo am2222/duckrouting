@@ -72,6 +72,15 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(duckrouting::GetStoerWagnerFunction());
 	loader.RegisterFunction(duckrouting::GetHawickCircuitsFunction());
 	loader.RegisterFunction(duckrouting::GetDominatorTreeFunction());
+
+	loader.RegisterFunction(duckrouting::GetMaxFlowFunction());
+	loader.RegisterFunction(duckrouting::GetPushRelabelFunction());
+	loader.RegisterFunction(duckrouting::GetEdmondsKarpFunction());
+	loader.RegisterFunction(duckrouting::GetBoykovKolmogorovFunction());
+	loader.RegisterFunction(duckrouting::GetMaxFlowMinCostFunction());
+	loader.RegisterFunction(duckrouting::GetMaxFlowMinCostCostFunction());
+	loader.RegisterFunction(duckrouting::GetEdgeDisjointPathsFunction());
+	loader.RegisterFunction(duckrouting::GetMaxCardinalityMatchFunction());
 }
 
 void DuckroutingExtension::Load(ExtensionLoader &loader) {

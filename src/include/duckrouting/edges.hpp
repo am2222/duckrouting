@@ -54,4 +54,23 @@ inline bool IsTraversable(double cost) {
 std::vector<EdgeRow> LoadEdges(duckdb::ClientContext &context, const std::string &edges_sql,
                                bool require_id = true);
 
+//! One row of a flow query. The flow functions want capacities rather than
+//! costs, and the min-cost variant wants both. A negative or missing value
+//! means that direction is unusable, exactly as with cost.
+struct FlowEdgeRow {
+	int64_t id;
+	int64_t source;
+	int64_t target;
+	double capacity;
+	double reverse_capacity;
+	double cost;
+	double reverse_cost;
+};
+
+//! Runs `edges_sql` and reads id, source, target plus whichever of capacity,
+//! reverse_capacity, cost and reverse_cost it exposes. Absent columns come back
+//! as -1. `require_capacity` and `require_cost` make those columns mandatory.
+std::vector<FlowEdgeRow> LoadFlowEdges(duckdb::ClientContext &context, const std::string &edges_sql,
+                                       bool require_capacity, bool require_cost);
+
 } // namespace duckrouting

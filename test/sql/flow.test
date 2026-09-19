@@ -1,0 +1,214 @@
+# name: test/sql/flow.test
+# description: maximum flow family vs pgRouting output
+# group: [duckrouting]
+#
+# Expected results from pgRouting docqueries/max_flow/.
+#
+# These functions read capacities rather than costs. A negative or absent
+# capacity means that direction carries nothing, mirroring how cost works
+# everywhere else.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE,
+                   capacity BIGINT, reverse_capacity BIGINT);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,5,6,1,1,80,130),(2,6,10,-1,1,-1,100),(3,10,15,-1,1,-1,130),(4,6,7,1,1,100,50),
+ (5,10,11,1,-1,130,-1),(6,1,3,1,1,50,100),(7,3,7,1,1,50,130),(8,7,11,1,1,100,130),
+ (9,11,16,1,1,130,80),(10,7,8,1,1,130,50),(11,11,12,1,-1,130,-1),(12,8,12,1,-1,100,-1),
+ (13,12,17,1,-1,100,-1),(14,8,9,1,1,80,130),(15,16,17,1,1,80,50),(16,15,16,1,1,80,80),
+ (17,2,4,1,1,130,100),(18,13,14,1,1,50,130);
+
+# ---------------------------------------------------------------------------
+# duckrouting_max_flow -- pgRouting q1 and q2
+# ---------------------------------------------------------------------------
+
+query R
+SELECT * FROM duckrouting_max_flow('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 12);
+----
+230
+
+# Several sinks are handled with a super-sink, so the flow can spread out.
+query R
+SELECT * FROM duckrouting_max_flow('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, [5,10,12]);
+----
+340
+
+# An unreachable sink carries nothing.
+query R
+SELECT * FROM duckrouting_max_flow('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 14);
+----
+0
+
+# Source and sink coinciding is not a flow problem.
+query R
+SELECT * FROM duckrouting_max_flow('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 11);
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_push_relabel / edmonds_karp / boykov_kolmogorov -- pgRouting q1
+# ---------------------------------------------------------------------------
+# All three find the same maximum. Here they also agree edge for edge.
+
+query IIIRR
+SELECT edge, start_vid, end_vid, flow, residual_capacity
+FROM duckrouting_push_relabel('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 12)
+ORDER BY edge;
+----
+8	11	7	100	30
+10	7	8	100	30
+11	11	12	130	0
+12	8	12	100	0
+
+query IIIRR
+SELECT edge, start_vid, end_vid, flow, residual_capacity
+FROM duckrouting_edmonds_karp('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 12)
+ORDER BY edge;
+----
+8	11	7	100	30
+10	7	8	100	30
+11	11	12	130	0
+12	8	12	100	0
+
+query IIIRR
+SELECT edge, start_vid, end_vid, flow, residual_capacity
+FROM duckrouting_boykov_kolmogorov('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 12)
+ORDER BY edge;
+----
+8	11	7	100	30
+10	7	8	100	30
+11	11	12	130	0
+12	8	12	100	0
+
+# Whichever algorithm is used, the flow leaving the source must equal the total.
+query I
+SELECT count(*) FROM (
+  SELECT sum(flow) AS out_of_source
+  FROM duckrouting_push_relabel('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 12)
+  WHERE start_vid = 11
+) WHERE out_of_source <> 230;
+----
+0
+
+# flow + residual_capacity is the capacity of that direction.
+query I
+SELECT count(*) FROM duckrouting_push_relabel('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 12) f
+JOIN edges e ON e.id = f.edge
+WHERE f.flow + f.residual_capacity
+    <> CASE WHEN e.source = f.start_vid THEN e.capacity ELSE e.reverse_capacity END;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_max_flow_min_cost and _cost -- pgRouting q1 and q2
+# ---------------------------------------------------------------------------
+
+query IIIRRRR
+SELECT edge, source, target, flow, residual_capacity, cost, agg_cost
+FROM duckrouting_max_flow_min_cost(
+  'SELECT id, source, target, capacity, reverse_capacity, cost, reverse_cost FROM edges', 11, 12);
+----
+8	11	7	100	30	100	100
+10	7	8	100	30	100	200
+11	11	12	130	0	130	330
+12	8	12	100	0	100	430
+
+query R
+SELECT * FROM duckrouting_max_flow_min_cost_cost(
+  'SELECT id, source, target, capacity, reverse_capacity, cost, reverse_cost FROM edges', 11, 12);
+----
+430
+
+query R
+SELECT * FROM duckrouting_max_flow_min_cost_cost(
+  'SELECT id, source, target, capacity, reverse_capacity, cost, reverse_cost FROM edges', 11, [5,10,12]);
+----
+760
+
+# The scalar form must equal the final agg_cost of the table form.
+query I
+SELECT count(*) FROM (
+  SELECT (SELECT max(agg_cost) FROM duckrouting_max_flow_min_cost(
+            'SELECT id, source, target, capacity, reverse_capacity, cost, reverse_cost FROM edges', 11, 12)) AS a,
+         (SELECT cost FROM duckrouting_max_flow_min_cost_cost(
+            'SELECT id, source, target, capacity, reverse_capacity, cost, reverse_cost FROM edges', 11, 12)) AS b
+) WHERE a <> b;
+----
+0
+
+# A min-cost flow moves the same total as a plain max flow.
+query I
+SELECT count(*) FROM (
+  SELECT sum(flow) AS moved FROM duckrouting_max_flow_min_cost(
+    'SELECT id, source, target, capacity, reverse_capacity, cost, reverse_cost FROM edges', 11, 12)
+  WHERE source = 11
+) WHERE moved <> 230;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_edge_disjoint_paths -- pgRouting q1
+# ---------------------------------------------------------------------------
+
+query IIIIIIIRR
+SELECT * FROM duckrouting_edge_disjoint_paths('SELECT id, source, target, cost, reverse_cost FROM edges', 11, 12);
+----
+1	1	1	11	12	11	8	1	0
+2	1	2	11	12	7	10	1	1
+3	1	3	11	12	8	12	1	2
+4	1	4	11	12	12	-1	0	3
+5	2	1	11	12	11	11	1	0
+6	2	2	11	12	12	-1	0	1
+
+# Disjoint means no edge is reused across the paths.
+query I
+SELECT count(*) FROM (
+  SELECT edge FROM duckrouting_edge_disjoint_paths('SELECT id, source, target, cost, reverse_cost FROM edges', 11, 12)
+  WHERE edge <> -1 GROUP BY edge HAVING count(*) > 1
+);
+----
+0
+
+# Every path really starts at the start and ends at the end.
+query I
+SELECT count(*) FROM (
+  SELECT path_id, first(node ORDER BY path_seq) AS head, last(node ORDER BY path_seq) AS tail
+  FROM duckrouting_edge_disjoint_paths('SELECT id, source, target, cost, reverse_cost FROM edges', 11, 12)
+  GROUP BY path_id
+) WHERE head <> 11 OR tail <> 12;
+----
+0
+
+# ---------------------------------------------------------------------------
+# duckrouting_max_cardinality_match -- pgRouting q2
+# ---------------------------------------------------------------------------
+
+query I
+SELECT * FROM duckrouting_max_cardinality_match('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+1
+5
+6
+13
+14
+16
+17
+18
+
+# A matching means no vertex is covered twice.
+query I
+SELECT count(*) FROM (
+  SELECT v FROM (
+    SELECT e.source AS v FROM edges e
+    JOIN duckrouting_max_cardinality_match('SELECT id, source, target, cost, reverse_cost FROM edges') m ON m.edge = e.id
+    UNION ALL
+    SELECT e.target FROM edges e
+    JOIN duckrouting_max_cardinality_match('SELECT id, source, target, cost, reverse_cost FROM edges') m ON m.edge = e.id
+  ) GROUP BY v HAVING count(*) > 1
+);
+----
+0

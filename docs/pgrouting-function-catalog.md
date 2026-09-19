@@ -57,12 +57,14 @@ wrappers is unencumbered.
 | `pgr_primBFS`, `pgr_primDFS`, `pgr_primDD` | `prim_minimum_spanning_tree` + traversal | `duckrouting_prim_bfs` / `_dfs` / `_dd` |
 | `pgr_breadthFirstSearch` | `breadth_first_search` | `duckrouting_breadth_first_search` |
 | `pgr_depthFirstSearch` | `depth_first_search` / `undirected_dfs` | `duckrouting_depth_first_search` |
-| `pgr_maxFlow`, `pgr_pushRelabel` | `push_relabel_max_flow` | |
-| `pgr_edmondsKarp` | `edmonds_karp_max_flow` | |
-| `pgr_boykovKolmogorov` | `boykov_kolmogorov_max_flow` | |
-| `pgr_edgeDisjointPaths` | runs on the same BGL flow graph | |
-| `pgr_maxFlowMinCost`, `pgr_maxFlowMinCost_Cost` | `successive_shortest_path_nonnegative_weights` + `find_flow_cost` | |
-| `pgr_maxCardinalityMatch` | `edmonds_maximum_cardinality_matching` | |
+| `pgr_maxFlow` | `push_relabel_max_flow` | `duckrouting_max_flow` |
+| `pgr_pushRelabel` | `push_relabel_max_flow` | `duckrouting_push_relabel` |
+| `pgr_edmondsKarp` | `edmonds_karp_max_flow` | `duckrouting_edmonds_karp` |
+| `pgr_boykovKolmogorov` | `boykov_kolmogorov_max_flow` | `duckrouting_boykov_kolmogorov` |
+| `pgr_edgeDisjointPaths` | unit-capacity flow, then decomposed | `duckrouting_edge_disjoint_paths` |
+| `pgr_maxFlowMinCost` | `successive_shortest_path_nonnegative_weights` | `duckrouting_max_flow_min_cost` |
+| `pgr_maxFlowMinCost_Cost` | same, totalled | `duckrouting_max_flow_min_cost_cost` |
+| `pgr_maxCardinalityMatch` | `edmonds_maximum_cardinality_matching` | `duckrouting_max_cardinality_match` |
 | `pgr_stoerWagner` | `stoer_wagner_min_cut` | `duckrouting_stoer_wagner` |
 | `pgr_transitiveClosure` | `transitive_closure` | `duckrouting_transitive_closure` |
 | `pgr_lengauerTarjanDominatorTree` | `dominator_tree` | `duckrouting_dominator_tree` |
@@ -134,6 +136,22 @@ pgRouting's q93 and q133 ask for `12 -> 7` undirected. Two paths cost exactly
 equal-cost path wins, so this is not a defect in either implementation. The
 tests assert hop count, endpoints and total cost for those cases, plus a check
 that every reported edge really connects its two reported nodes.
+
+The flow family needed three corrections, all of which produced plausible but
+wrong output first:
+
+- **Arc construction.** Pairing the two directions of an input edge as each
+  other's residual partner lets push-relabel settle with flow circulating
+  around cycles -- a valid maximum, but it reports flow on edges carrying none
+  of it. pgRouting adds each direction as an *independent* arc with its own
+  zero-capacity partner (`src/max_flow/maxflow.cpp`), and so does duckrouting.
+- **`find_flow_cost`** walks the negative-weight residual partners too, so it
+  cancelled most of the total away: 230 instead of 430. The cost is summed over
+  the reportable arcs directly.
+- **Flow decomposition** for `edge_disjoint_paths` followed a circulation and
+  produced a path doubling back through the same vertices. Opposing flow
+  between a pair of vertices is cancelled before decomposing, and a path never
+  revisits a vertex.
 
 A proper **edge colouring** is likewise not unique: pgRouting gives edge 1 the
 colour 1 where Boost gives it 3, with the other 17 edges agreeing. The test
