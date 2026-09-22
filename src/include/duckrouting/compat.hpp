@@ -49,4 +49,18 @@ inline auto NameMatches(const Name &name, const char *wanted) -> decltype(name =
 	return name == wanted;
 }
 
+//! The text of a DuckDB name, for the cases where one has to be copied into a
+//! plain `string` -- reading the keys of a named-parameter map back out, say.
+//! A `string` is already text; an `Identifier` is converted through the
+//! `ToString()` that DuckDB's name types provide. The same exact-overload
+//! versus template split as above picks between them.
+inline std::string NameText(const std::string &name) {
+	return name;
+}
+
+template <typename Name>
+inline auto NameText(const Name &name) -> decltype(name.ToString()) {
+	return name.ToString();
+}
+
 } // namespace duckrouting

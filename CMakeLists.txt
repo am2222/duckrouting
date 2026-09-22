@@ -19,6 +19,7 @@ include_directories(src/include)
 
 set(EXTENSION_SOURCES
     src/duckrouting_extension.cpp
+    src/function_docs.cpp
     src/edges.cpp
     src/dijkstra.cpp
     src/functions.cpp

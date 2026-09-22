@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckrouting/dijkstra.hpp"
+#include "duckrouting/function_docs.hpp"
 #include "duckrouting/graph_functions.hpp"
 
 #include <boost/version.hpp>
@@ -20,109 +21,116 @@ inline void DuckroutingVersionScalarFun(DataChunk &args, ExpressionState &state,
 	});
 }
 
+//! Every registration goes through duckrouting::Documented, which swaps the
+//! bare RegisterFunction overload -- the one with nowhere to put a description
+//! -- for the CreateInfo form, and fills it in from src/function_docs.cpp.
+//! Without it duckdb_functions() reports these as undocumented `col0`
+//! signatures, which is all an agent connected to a database can see.
+using duckrouting::Documented;
+
 static void LoadInternal(ExtensionLoader &loader) {
 	auto duckrouting_version_scalar_function = ScalarFunction("duckrouting_version", {LogicalType::VARCHAR},
 	                                                          LogicalType::VARCHAR, DuckroutingVersionScalarFun);
-	loader.RegisterFunction(duckrouting_version_scalar_function);
+	loader.RegisterFunction(Documented(duckrouting_version_scalar_function));
 
-	loader.RegisterFunction(duckrouting::GetDijkstraFunction());
-	loader.RegisterFunction(duckrouting::GetDijkstraCostFunction());
-	loader.RegisterFunction(duckrouting::GetDijkstraCostMatrixFunction());
-	loader.RegisterFunction(duckrouting::GetDrivingDistanceFunction());
-	loader.RegisterFunction(duckrouting::GetDijkstraViaFunction());
-	loader.RegisterFunction(duckrouting::GetDijkstraNearFunction());
-	loader.RegisterFunction(duckrouting::GetDijkstraNearCostFunction());
-	loader.RegisterFunction(duckrouting::GetKspFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetDijkstraFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetDijkstraCostFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetDijkstraCostMatrixFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetDrivingDistanceFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetDijkstraViaFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetDijkstraNearFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetDijkstraNearCostFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetKspFunction()));
 
-	loader.RegisterFunction(duckrouting::GetFloydWarshallFunction());
-	loader.RegisterFunction(duckrouting::GetJohnsonFunction());
-	loader.RegisterFunction(duckrouting::GetConnectedComponentsFunction());
-	loader.RegisterFunction(duckrouting::GetStrongComponentsFunction());
-	loader.RegisterFunction(duckrouting::GetBiconnectedComponentsFunction());
-	loader.RegisterFunction(duckrouting::GetArticulationPointsFunction());
-	loader.RegisterFunction(duckrouting::GetBridgesFunction());
-	loader.RegisterFunction(duckrouting::GetMakeConnectedFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetFloydWarshallFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetJohnsonFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetConnectedComponentsFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetStrongComponentsFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBiconnectedComponentsFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetArticulationPointsFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBridgesFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetMakeConnectedFunction()));
 
-	loader.RegisterFunction(duckrouting::GetKruskalFunction());
-	loader.RegisterFunction(duckrouting::GetPrimFunction());
-	loader.RegisterFunction(duckrouting::GetKruskalBFSFunction());
-	loader.RegisterFunction(duckrouting::GetKruskalDFSFunction());
-	loader.RegisterFunction(duckrouting::GetKruskalDDFunction());
-	loader.RegisterFunction(duckrouting::GetPrimBFSFunction());
-	loader.RegisterFunction(duckrouting::GetPrimDFSFunction());
-	loader.RegisterFunction(duckrouting::GetPrimDDFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetKruskalFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetPrimFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetKruskalBFSFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetKruskalDFSFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetKruskalDDFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetPrimBFSFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetPrimDFSFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetPrimDDFunction()));
 
-	loader.RegisterFunction(duckrouting::GetBreadthFirstSearchFunction());
-	loader.RegisterFunction(duckrouting::GetDepthFirstSearchFunction());
-	loader.RegisterFunction(duckrouting::GetBellmanFordFunction());
-	loader.RegisterFunction(duckrouting::GetDagShortestPathFunction());
-	loader.RegisterFunction(duckrouting::GetTransitiveClosureFunction());
-	loader.RegisterFunction(duckrouting::GetCuthillMckeeOrderingFunction());
-	loader.RegisterFunction(duckrouting::GetKingOrderingFunction());
-	loader.RegisterFunction(duckrouting::GetSloanOrderingFunction());
-	loader.RegisterFunction(duckrouting::GetTopologicalSortFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetBreadthFirstSearchFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetDepthFirstSearchFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBellmanFordFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetDagShortestPathFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetTransitiveClosureFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetCuthillMckeeOrderingFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetKingOrderingFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetSloanOrderingFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetTopologicalSortFunction()));
 
-	loader.RegisterFunction(duckrouting::GetSequentialVertexColoringFunction());
-	loader.RegisterFunction(duckrouting::GetEdgeColoringFunction());
-	loader.RegisterFunction(duckrouting::GetBipartiteFunction());
-	loader.RegisterFunction(duckrouting::GetIsPlanarFunction());
-	loader.RegisterFunction(duckrouting::GetBoyerMyrvoldFunction());
-	loader.RegisterFunction(duckrouting::GetBandwidthFunction());
-	loader.RegisterFunction(duckrouting::GetBetweennessCentralityFunction());
-	loader.RegisterFunction(duckrouting::GetStoerWagnerFunction());
-	loader.RegisterFunction(duckrouting::GetHawickCircuitsFunction());
-	loader.RegisterFunction(duckrouting::GetDominatorTreeFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetSequentialVertexColoringFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetEdgeColoringFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBipartiteFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetIsPlanarFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBoyerMyrvoldFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBandwidthFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBetweennessCentralityFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetStoerWagnerFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetHawickCircuitsFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetDominatorTreeFunction()));
 
-	loader.RegisterFunction(duckrouting::GetMaxFlowFunction());
-	loader.RegisterFunction(duckrouting::GetPushRelabelFunction());
-	loader.RegisterFunction(duckrouting::GetEdmondsKarpFunction());
-	loader.RegisterFunction(duckrouting::GetBoykovKolmogorovFunction());
-	loader.RegisterFunction(duckrouting::GetMaxFlowMinCostFunction());
-	loader.RegisterFunction(duckrouting::GetMaxFlowMinCostCostFunction());
-	loader.RegisterFunction(duckrouting::GetEdgeDisjointPathsFunction());
-	loader.RegisterFunction(duckrouting::GetMaxCardinalityMatchFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetMaxFlowFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetPushRelabelFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetEdmondsKarpFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBoykovKolmogorovFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetMaxFlowMinCostFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetMaxFlowMinCostCostFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetEdgeDisjointPathsFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetMaxCardinalityMatchFunction()));
 
-	loader.RegisterFunction(duckrouting::GetAStarFunction());
-	loader.RegisterFunction(duckrouting::GetAStarCostFunction());
-	loader.RegisterFunction(duckrouting::GetAStarCostMatrixFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetAStarFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetAStarCostFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetAStarCostMatrixFunction()));
 
-	loader.RegisterFunction(duckrouting::GetTspFunction());
-	loader.RegisterFunction(duckrouting::GetTspEuclideanFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetTspFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetTspEuclideanFunction()));
 
-	loader.RegisterFunction(duckrouting::GetContractionHierarchiesFunction());
-	loader.RegisterFunction(duckrouting::GetWithPointsDDFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetContractionHierarchiesFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetWithPointsDDFunction()));
 
-	loader.RegisterFunction(duckrouting::GetBdDijkstraFunction());
-	loader.RegisterFunction(duckrouting::GetBdDijkstraCostFunction());
-	loader.RegisterFunction(duckrouting::GetBdDijkstraCostMatrixFunction());
-	loader.RegisterFunction(duckrouting::GetBdAStarFunction());
-	loader.RegisterFunction(duckrouting::GetBdAStarCostFunction());
-	loader.RegisterFunction(duckrouting::GetBdAStarCostMatrixFunction());
-	loader.RegisterFunction(duckrouting::GetEdwardMooreFunction());
-	loader.RegisterFunction(duckrouting::GetBinaryBreadthFirstSearchFunction());
-	loader.RegisterFunction(duckrouting::GetExtractVerticesFunction());
-	loader.RegisterFunction(duckrouting::GetDegreeFunction());
-	loader.RegisterFunction(duckrouting::GetFullVersionFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetBdDijkstraFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBdDijkstraCostFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBdDijkstraCostMatrixFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBdAStarFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBdAStarCostFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBdAStarCostMatrixFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetEdwardMooreFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetBinaryBreadthFirstSearchFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetExtractVerticesFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetDegreeFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetFullVersionFunction()));
 
-	loader.RegisterFunction(duckrouting::GetWithPointsFunction());
-	loader.RegisterFunction(duckrouting::GetWithPointsCostFunction());
-	loader.RegisterFunction(duckrouting::GetWithPointsCostMatrixFunction());
-	loader.RegisterFunction(duckrouting::GetWithPointsViaFunction());
-	loader.RegisterFunction(duckrouting::GetWithPointsKspFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetWithPointsFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetWithPointsCostFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetWithPointsCostMatrixFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetWithPointsViaFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetWithPointsKspFunction()));
 
-	loader.RegisterFunction(duckrouting::GetContractionFunction());
-	loader.RegisterFunction(duckrouting::GetDeadEndContractionFunction());
-	loader.RegisterFunction(duckrouting::GetLinearContractionFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetContractionFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetDeadEndContractionFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetLinearContractionFunction()));
 
-	loader.RegisterFunction(duckrouting::GetTrspFunction());
-	loader.RegisterFunction(duckrouting::GetTrspViaFunction());
-	loader.RegisterFunction(duckrouting::GetTrspWithPointsFunction());
-	loader.RegisterFunction(duckrouting::GetTrspViaWithPointsFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetTrspFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetTrspViaFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetTrspWithPointsFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetTrspViaWithPointsFunction()));
 
-	loader.RegisterFunction(duckrouting::GetLineGraphFunction());
-	loader.RegisterFunction(duckrouting::GetLineGraphFullFunction());
-	loader.RegisterFunction(duckrouting::GetChinesePostmanFunction());
-	loader.RegisterFunction(duckrouting::GetChinesePostmanCostFunction());
+	loader.RegisterFunction(Documented(duckrouting::GetLineGraphFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetLineGraphFullFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetChinesePostmanFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetChinesePostmanCostFunction()));
 
 	duckrouting::RegisterGeometryMacros(loader);
 }

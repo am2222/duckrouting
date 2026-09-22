@@ -108,3 +108,20 @@ duckrouting_with_points_cost_matrix	2
 duckrouting_with_points_dd	4
 duckrouting_with_points_ksp	8
 duckrouting_with_points_via	2
+
+# Every function carries documentation, and every argument has a real name.
+#
+# duckdb_functions() is all an agent connected to a database can read: the
+# README and the community-extensions description are not reachable over a SQL
+# connection. A function registered through the bare RegisterFunction overload
+# lands here with a NULL description and col0/col1 for its arguments, so this
+# fails the moment one slips past duckrouting::Documented.
+query I
+SELECT count(*) FROM duckdb_functions()
+WHERE function_name LIKE 'duckrouting_%'
+  AND (description IS NULL
+       OR len(examples) = 0
+       OR len(categories) = 0
+       OR len(list_filter(parameters, lambda name: regexp_matches(name, '^col[0-9]+$'))) > 0);
+----
+0

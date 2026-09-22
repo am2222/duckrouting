@@ -1,4 +1,5 @@
 #include "duckrouting/graph_functions.hpp"
+#include "duckrouting/function_docs.hpp"
 
 #include "duckdb/catalog/default/default_table_functions.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
@@ -106,6 +107,9 @@ const duckdb::DefaultTableMacro kGeometryMacros[] = {
 void RegisterGeometryMacros(duckdb::ExtensionLoader &loader) {
 	for (size_t i = 0; kGeometryMacros[i].name != nullptr; i++) {
 		auto info = duckdb::DefaultTableFunctionGenerator::CreateTableMacroInfo(kGeometryMacros[i]);
+		// A macro already carries its own parameter names, so this only adds the
+		// prose duckdb_functions() would otherwise report as NULL.
+		Document(*info);
 		loader.RegisterFunction(*info);
 	}
 }
