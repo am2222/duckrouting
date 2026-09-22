@@ -109,19 +109,33 @@ duckrouting_with_points_dd	4
 duckrouting_with_points_ksp	8
 duckrouting_with_points_via	2
 
-# Every function carries documentation, and every argument has a real name.
+# Every function carries documentation.
 #
 # duckdb_functions() is all an agent connected to a database can read: the
 # README and the community-extensions description are not reachable over a SQL
 # connection. A function registered through the bare RegisterFunction overload
-# lands here with a NULL description and col0/col1 for its arguments, so this
-# fails the moment one slips past duckrouting::Documented.
+# lands here with a NULL description, so this fails the moment one slips past
+# duckrouting::Documented.
 query I
 SELECT count(*) FROM duckdb_functions()
 WHERE function_name LIKE 'duckrouting_%'
-  AND (description IS NULL
-       OR len(examples) = 0
-       OR len(categories) = 0
-       OR len(list_filter(parameters, lambda name: regexp_matches(name, '^col[0-9]+$'))) > 0);
+  AND (description IS NULL OR len(examples) = 0 OR len(categories) = 0);
+----
+0
+
+# ... and every argument has a real name rather than DuckDB's col0 placeholder.
+#
+# Kept separate because it is the one assertion here that depends on DuckDB
+# rather than on this extension. On 1.5 duckdb_functions() takes argument names
+# from the FunctionDescription. DuckDB 2.0 inverted that: names come from the
+# function itself, and the description is consulted only when the two disagree
+# on how many there are -- which for a table function never happens, because
+# the v2 extractor generates one colN per argument. So this assertion fails on
+# 2.0 for every table function until table functions gain a FunctionSignature
+# with named parameters, the way scalar functions did.
+query I
+SELECT count(*) FROM duckdb_functions()
+WHERE function_name LIKE 'duckrouting_%'
+  AND len(list_filter(parameters, lambda name: regexp_matches(name, '^col[0-9]+$'))) > 0;
 ----
 0

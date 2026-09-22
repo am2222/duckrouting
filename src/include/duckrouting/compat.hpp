@@ -49,18 +49,67 @@ inline auto NameMatches(const Name &name, const char *wanted) -> decltype(name =
 	return name == wanted;
 }
 
-//! The text of a DuckDB name, for the cases where one has to be copied into a
-//! plain `string` -- reading the keys of a named-parameter map back out, say.
-//! A `string` is already text; an `Identifier` is converted through the
-//! `ToString()` that DuckDB's name types provide. The same exact-overload
-//! versus template split as above picks between them.
-inline std::string NameText(const std::string &name) {
+//! The text of a DuckDB name, for the cases where one has to be read back out
+//! as a plain `string` -- the keys of a named-parameter map, say. A `string` is
+//! already text; v2's `Identifier` keeps its raw value behind
+//! `GetIdentifierName()`, because converting one to a string discards its
+//! case-insensitive semantics and DuckDB makes you ask for that. The same
+//! exact-overload versus template split as above picks between them.
+inline const std::string &NameText(const std::string &name) {
 	return name;
 }
 
 template <typename Name>
-inline auto NameText(const Name &name) -> decltype(name.ToString()) {
-	return name.ToString();
+inline auto NameText(const Name &name) -> decltype((name.GetIdentifierName())) {
+	return name.GetIdentifierName();
+}
+
+//! The name a CreateInfo carries. v1.5 has it as a `string` member; v2 moved it
+//! into a qualified name reachable through `GetFunctionName()`.
+template <typename Info>
+inline auto InfoName(const Info &info) -> decltype((info.name)) {
+	return info.name;
+}
+
+template <typename Info>
+inline auto InfoName(const Info &info) -> decltype((info.GetFunctionName())) {
+	return info.GetFunctionName();
+}
+
+//! The positional argument types of one function overload. v1.5 exposes them as
+//! a plain member; v2 adds an accessor and keeps the member. The two candidates
+//! are ranked rather than overloaded, because where both spellings exist an
+//! unranked pair is ambiguous rather than merely redundant -- `0` is an `int`,
+//! so the accessor wins, and the member is only reached when it does not exist.
+namespace detail {
+
+template <typename Function>
+inline auto ArgumentTypes(const Function &function, int) -> decltype((function.GetArguments())) {
+	return function.GetArguments();
+}
+
+template <typename Function>
+inline auto ArgumentTypes(const Function &function, long) -> decltype((function.arguments)) {
+	return function.arguments;
+}
+
+} // namespace detail
+
+template <typename Function>
+inline auto ArgumentTypes(const Function &function) -> decltype(detail::ArgumentTypes(function, 0)) {
+	return detail::ArgumentTypes(function, 0);
+}
+
+//! One overload out of a function set. v1.5 stores them by value; v2 shares
+//! them behind `shared_ptr` so that a bound function keeps its overload alive.
+template <typename Function>
+inline const Function &Overload(const Function &function) {
+	return function;
+}
+
+template <typename Function>
+inline const Function &Overload(const duckdb::shared_ptr<const Function> &function) {
+	return *function;
 }
 
 } // namespace duckrouting

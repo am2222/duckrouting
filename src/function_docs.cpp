@@ -664,17 +664,18 @@ void NamePositionalArguments(const FunctionDoc &doc, const duckdb::vector<duckdb
 } // namespace
 
 duckdb::CreateTableFunctionInfo Documented(duckdb::TableFunctionSet set) {
-	const FunctionDoc &doc = Require(set.name);
+	const FunctionDoc &doc = Require(NameText(set.name));
 	duckdb::CreateTableFunctionInfo info(std::move(set));
 	// What the bare RegisterFunction(TableFunctionSet) overload does before
 	// handing the info to the catalog; CreateInfo itself defaults to
 	// ERROR_ON_CONFLICT.
 	info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 	for (size_t i = 0; i < info.functions.functions.size(); i++) {
-		const duckdb::TableFunction &function = info.functions.functions[i];
+		const duckdb::TableFunction &function = Overload(info.functions.functions[i]);
+		const duckdb::vector<duckdb::LogicalType> &arguments = ArgumentTypes(function);
 		FunctionDescription description = Prose(doc);
-		description.parameter_types = function.arguments;
-		NamePositionalArguments(doc, function.arguments, description);
+		description.parameter_types = arguments;
+		NamePositionalArguments(doc, arguments, description);
 		// duckdb_functions() lists named parameters after the positional ones,
 		// in the order the function's own map yields them, and falls back to
 		// `colN` for any name the description does not reach. Reading them back
@@ -688,17 +689,22 @@ duckdb::CreateTableFunctionInfo Documented(duckdb::TableFunctionSet set) {
 }
 
 duckdb::CreateScalarFunctionInfo Documented(duckdb::ScalarFunction function) {
-	const FunctionDoc &doc = Require(function.name);
+	const FunctionDoc &doc = Require(NameText(function.name));
 	duckdb::ScalarFunctionSet set(function.name);
 	set.AddFunction(std::move(function));
 	duckdb::CreateScalarFunctionInfo info(std::move(set));
 	info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
-	for (size_t i = 0; i < info.functions.functions.size(); i++) {
-		FunctionDescription description = Prose(doc);
-		description.parameter_types = info.functions.functions[i].arguments;
-		NamePositionalArguments(doc, info.functions.functions[i].arguments, description);
-		info.descriptions.push_back(description);
+	// There is only ever one overload here, so a lone description with no
+	// parameter types attaches to it whatever its arity, and a name past the
+	// last argument is simply never read. That is worth the small asymmetry
+	// with the table functions above: it avoids reaching for the argument
+	// types, which v2 keeps inside a FunctionSignature rather than on the
+	// function itself.
+	FunctionDescription description = Prose(doc);
+	for (size_t i = 0; i < kMaxParameters && doc.parameters[i] != nullptr; i++) {
+		description.parameter_names.push_back(doc.parameters[i]);
 	}
+	info.descriptions.push_back(description);
 	return info;
 }
 
@@ -706,7 +712,7 @@ void Document(duckdb::CreateMacroInfo &info) {
 	// A macro already reports the parameter names it was declared with, and a
 	// lone description with no parameter types attaches to every overload
 	// without displacing them.
-	info.descriptions.push_back(Prose(Require(info.name)));
+	info.descriptions.push_back(Prose(Require(NameText(InfoName(info)))));
 }
 
 } // namespace duckrouting
