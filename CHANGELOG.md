@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/am2222/duckrouting/compare/v0.1.1...v0.1.2) (2026-09-22)
+
+
+### Features
+
+* **svg:** add social SVG for duckrouting project ([4d69a7e](https://github.com/am2222/duckrouting/commit/4d69a7e23396a2382a8f368e2d0814b0bdb948b4))
+
 ## [0.1.1](https://github.com/am2222/duckrouting/compare/v0.1.0...v0.1.1) (2026-09-19)
 
 
