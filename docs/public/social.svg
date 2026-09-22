@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img"
+     aria-label="duckrouting — graph routing for DuckDB">
+  <title>duckrouting</title>
+  <desc>A duck riding the first edge of a highlighted shortest path through a graph, below the duckrouting wordmark.</desc>
+
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#101726"/>
+      <stop offset="60%" stop-color="#151d31"/>
+      <stop offset="100%" stop-color="#1b2338"/>
+    </linearGradient>
+    <linearGradient id="route" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffd233"/>
+      <stop offset="100%" stop-color="#fff35c"/>
+    </linearGradient>
+    <filter id="lit" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="9" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Full bleed: GitHub renders the social card as a plain rectangle, so a
+       rounded corner here would just expose the page behind it. -->
+  <rect width="1280" height="640" fill="url(#panel)"/>
+
+  <g font-family="'Inter','Segoe UI',system-ui,-apple-system,sans-serif" text-anchor="middle">
+    <text x="640" y="200" font-size="108" font-weight="700" fill="#f4f7ff" letter-spacing="-2.5">
+      duck<tspan fill="url(#route)">routing</tspan>
+    </text>
+    <text x="640" y="258" font-size="36" font-weight="500" fill="#93a2c4">
+      Graph routing for DuckDB
+    </text>
+    <text x="640" y="302" font-size="25" font-weight="400" fill="#63739a">
+      Shortest paths, flow, spanning trees, contraction
+    </text>
+  </g>
+
+  <!-- Drawn at the header's natural coordinates; the transform is computed to
+       fit this block into the space below the wordmark. -->
+  <g id="art" transform="translate(-519.64 280.00) scale(1.2387)">
+    <g stroke="#38456a" stroke-width="2.4" stroke-linecap="round" fill="none" opacity="0.9">
+      <path d="M740 200 L832 248"/>
+      <path d="M828 128 L832 248"/>
+      <path d="M828 128 L928 68"/>
+      <path d="M832 248 L938 176"/>
+      <path d="M832 248 L1032 240"/>
+      <path d="M928 68 L938 176"/>
+      <path d="M928 68 L1128 62"/>
+      <path d="M938 176 L1032 240"/>
+      <path d="M1032 240 L1132 186"/>
+      <path d="M1032 240 L1044 112"/>
+      <path d="M1044 112 L1128 62"/>
+      <path d="M1128 62 L1132 186"/>
+    </g>
+
+    <polyline points="740,200 828,128 938,176 1044,112 1132,186"
+              fill="none" stroke="url(#route)" stroke-width="6"
+              stroke-linecap="round" stroke-linejoin="round" filter="url(#lit)" opacity="0.95"/>
+
+    <g fill="#1b2338" stroke="#4a5980" stroke-width="2.5">
+      <circle cx="832" cy="248" r="9"/>
+      <circle cx="928" cy="68" r="9"/>
+      <circle cx="1032" cy="240" r="9"/>
+      <circle cx="1128" cy="62" r="9"/>
+    </g>
+
+    <g fill="#ffd233" stroke="#101726" stroke-width="3">
+      <circle cx="740" cy="200" r="12"/>
+      <circle cx="828" cy="128" r="10"/>
+      <circle cx="938" cy="176" r="10"/>
+      <circle cx="1044" cy="112" r="10"/>
+      <circle cx="1132" cy="186" r="12"/>
+    </g>
+
+    <g transform="translate(779.8 163.6) rotate(-39.3) scale(0.85) translate(-32 -30)"
+       stroke="#101726" stroke-width="6" stroke-linejoin="round">
+      <path d="M16 22 L-4 9 L11 36 Z" fill="#fdf6e3"/>
+      <path d="M10 38 C9 25 20 17 33 17 C47 17 55 26 55 34 C55 42 45 48 31 48 C19 48 12 45 10 38 Z" fill="#fdf6e3"/>
+      <circle cx="46" cy="14" r="12.5" fill="#fdf6e3"/>
+      <path d="M57 12 L72 16.5 L57 22 Z" fill="#ff9f1c"/>
+      <path d="M24 31 C30 26 40 27 44 33 C40 39 30 40 24 35 Z" fill="#e6d9b8" stroke="none"/>
+      <circle cx="51" cy="10" r="2.6" fill="#101726" stroke="none"/>
+    </g>
+  </g>
+</svg>

@@ -10,10 +10,14 @@ export default defineConfig({
   lastUpdated: true,
   cleanUrls: true,
 
+  head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/duckrouting/icon.svg' }]],
+
   // Repo docs that are not part of the site.
   srcExclude: ['UPDATING.md'],
 
   themeConfig: {
+    logo: '/icon.svg',
+
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Functions', link: '/functions/dijkstra' },

@@ -1,10 +1,17 @@
-# duckrouting
+<a href="https://am2222.github.io/duckrouting/">
+  <img src="docs/public/header.svg" alt="duckrouting — graph routing for DuckDB" width="100%">
+</a>
+
+[![release](https://img.shields.io/github/v/release/am2222/duckrouting?sort=semver&display_name=tag&label=release&color=ffd233&labelColor=1b2338&style=flat-square)](https://github.com/am2222/duckrouting/releases)
+[![build](https://img.shields.io/github/actions/workflow/status/am2222/duckrouting/MainDistributionPipeline.yml?branch=main&label=build&labelColor=1b2338&style=flat-square)](https://github.com/am2222/duckrouting/actions/workflows/MainDistributionPipeline.yml)
+[![docs](https://img.shields.io/github/actions/workflow/status/am2222/duckrouting/Documentation.yml?branch=main&label=docs&labelColor=1b2338&style=flat-square)](https://github.com/am2222/duckrouting/actions/workflows/Documentation.yml)
+[![license](https://img.shields.io/github/license/am2222/duckrouting?label=license&color=6f7dab&labelColor=1b2338&style=flat-square)](LICENSE)
 
 Graph routing for DuckDB. Shortest paths, flow, spanning trees, contraction and
 more — following [pgRouting](https://pgrouting.org/)'s function semantics and
 powered by the [Boost Graph Library](https://www.boost.org/doc/libs/release/libs/graph/).
 
-**90 of pgRouting's 93 functions**, checked against pgRouting's own published
+**Follows pgrouting's style**, checked against pgRouting's own published
 output. [Documentation](https://am2222.github.io/duckrouting/) ·
 [Function catalog](docs/pgrouting-function-catalog.md)
 
@@ -33,9 +40,7 @@ SELECT node, edge, agg_cost FROM duckrouting_dijkstra(
 --    7 |   -1 |      2.0
 ```
 
-The first argument is a **string containing SQL**, not a table. That is how
-pgRouting works, and keeping it means the graph can be filtered, joined or
-computed on the fly without materialising a separate topology.
+The first argument is a **string containing SQL**, not a table. 
 
 ## The edges query
 
@@ -87,8 +92,7 @@ a commercial product. Three functions out of 93 is not worth that. See the
 
 ## How results are verified
 
-Expected results come from pgRouting's own documentation queries and test suite,
-not from hand-written expectations. Where the two legitimately differ — because
+Expected results come from pgRouting's own documentation queries and test suite. Where the two legitimately differ — because
 a shortest path ties, a spanning tree is not unique, or a matching has several
 maximum solutions — the difference is documented in the
 [catalog](docs/pgrouting-function-catalog.md) and the tests assert the

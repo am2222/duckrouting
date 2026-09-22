@@ -14,16 +14,11 @@ permissions:
   contents: write
   pull-requests: write
 
-# RELEASE_PAT is a classic personal access token with the `public_repo` scope. It is
-# needed for two reasons:
-#   1. Tags and releases created with the default GITHUB_TOKEN do not trigger other
-#      workflows, so the tag-triggered release job in MainDistributionPipeline.yml
-#      would never run and a release would ship without binaries. A PAT-created tag
-#      does trigger it.
-#   2. Pushing to the community-extensions fork and opening the upstream PR both need
-#      access outside this repository.
-# Until the secret exists, release-please falls back to GITHUB_TOKEN and the
-# community-extensions job is skipped.
+# RELEASE_PAT is a classic personal access token with the `public_repo` scope. The
+# community-extensions job needs it because pushing to the fork and opening a PR on
+# duckdb/community-extensions are both outside this repository, which the default
+# GITHUB_TOKEN cannot reach. release-please itself falls back to GITHUB_TOKEN; that
+# is fine here, because nothing in this repo triggers on a tag.
 
 jobs:
   release-please:
@@ -45,14 +40,12 @@ jobs:
   # the same workflow run as release-please (rather than on a `release:` trigger) so it
   # works regardless of which token created the release.
   #
-  # DISABLED until duckrouting is listed in community-extensions. This job rewrites
-  # `extensions/duckrouting/description.yml` in that repo, and there is nothing there
-  # to rewrite yet -- the first submission has to be opened by hand. Once it is
-  # merged, drop the `false &&` below and set the RELEASE_PAT secret.
+  # Requires RELEASE_PAT and an existing `extensions/duckrouting/` directory upstream:
+  # the first listing is opened by hand, every later release is bumped from here.
   community-extensions-pr:
     name: Open community-extensions PR
     needs: release-please
-    if: false && needs.release-please.outputs.release_created == 'true'
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -92,7 +85,9 @@ jobs:
         working-directory: community-extensions
         run: |
           target="extensions/$EXT_NAME/description.yml"
-          sed -E "s|^([[:space:]]*ref:).*|\1 $SHA|" "../source/description.yml" > "$target"
+          sed -E -e "s|^([[:space:]]*ref:).*|\1 $SHA|" \
+                 -e "s|[[:space:]]*# x-release-please-version[[:space:]]*$||" \
+                 "../source/description.yml" > "$target"
           grep -q "ref: $SHA" "$target"
           grep -q "version: $VERSION" "$target" || {
             echo "::error::description.yml does not carry version $VERSION; check the x-release-please-version marker"
