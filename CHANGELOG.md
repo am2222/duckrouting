@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.3](https://github.com/am2222/duckrouting/compare/v0.1.2...v0.1.3) (2026-09-23)
+
+
+### Features
+
+* **docs:** add function documentation for duckrouting functions ([28b5b42](https://github.com/am2222/duckrouting/commit/28b5b427b9d871a8b7f51992cc6ce12f796152c5))
+* **docs:** enhance function documentation and argument naming in tests ([5617efc](https://github.com/am2222/duckrouting/commit/5617efc9e07ce3f38ca272c986b28a00a8ac3012))
+* **scripts:** add script to build demo road network from OSM data ([004479c](https://github.com/am2222/duckrouting/commit/004479c61ceec7e9c50d9793844c3b758f9e9cd7))
+
+
+### Bug Fixes
+
+* **tests:** update assertion for duckdb_functions() argument names ([8d82f32](https://github.com/am2222/duckrouting/commit/8d82f32b35d624733e2a6bba1c9cb0ad001f4ba7))
+
 ## [0.1.2](https://github.com/am2222/duckrouting/compare/v0.1.1...v0.1.2) (2026-09-22)
 
 
