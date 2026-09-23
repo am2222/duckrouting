@@ -15,11 +15,19 @@ export default defineConfig({
   // Repo docs that are not part of the site.
   srcExclude: ['UPDATING.md'],
 
+  vite: {
+    // MapLibre starts its worker with { type: 'module' }, so the worker chunk
+    // has to be ESM. Vite's default is iife, which loads as a classic script
+    // and fails. See the setWorkerUrl call in RoutingDemo.vue.
+    worker: { format: 'es' }
+  },
+
   themeConfig: {
     logo: '/icon.svg',
 
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
+      { text: 'Demo', link: '/demo' },
       { text: 'Functions', link: '/functions/dijkstra' },
       { text: 'pgRouting catalog', link: '/pgrouting-function-catalog' }
     ],
@@ -29,7 +37,8 @@ export default defineConfig({
         text: 'Guide',
         items: [
           { text: 'Getting started', link: '/guide/getting-started' },
-          { text: 'The edges query', link: '/guide/edges-query' }
+          { text: 'The edges query', link: '/guide/edges-query' },
+          { text: 'Live demo', link: '/demo' }
         ]
       },
       {

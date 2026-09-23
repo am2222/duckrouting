@@ -9,5 +9,9 @@
   },
   "devDependencies": {
     "vitepress": "^1.6.3"
+  },
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "1.33.1-dev64.0",
+    "maplibre-gl": "^6.11.0"
   }
 }

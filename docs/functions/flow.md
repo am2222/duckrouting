@@ -56,6 +56,27 @@ capacity.
 The three differ in algorithm, not in answer — though on a network with slack
 they may distribute the same total differently.
 
+::: warning How differently, on a real network
+"Differently" can be dramatic. Push-relabel leaves **circulation**: cycles that
+satisfy flow conservation but carry nothing from the source to the sink. On the
+1,912-edge network behind the [live demo](/demo), one source/sink pair returns
+
+| Function | Edges reported | Σ `flow` |
+| --- | --- | --- |
+| `duckrouting_push_relabel` | 474 | 123,000 |
+| `duckrouting_edmonds_karp` | 57 | 34,200 |
+| `duckrouting_boykov_kolmogorov` | 57 | 34,200 |
+
+for the same maximum of 600. Push-relabel's answer is a valid maximum flow --
+conservation holds at every vertex, no edge exceeds its capacity -- but those
+474 edges fall into 16 connected components, and only one of them touches the
+source or the sink. The rest are loops going nowhere.
+
+So if you are drawing the result, or decomposing it into routes, prefer
+`edmonds_karp` or `boykov_kolmogorov`. If you only want the number, any of them
+will do, and `duckrouting_max_flow` is cheaper than all three.
+:::
+
 ```sql
 SELECT edge, start_vid, end_vid, flow, residual_capacity
 FROM duckrouting_push_relabel(
