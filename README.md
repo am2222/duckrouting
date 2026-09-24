@@ -138,3 +138,6 @@ The geometry tests need `INSTALL spatial` and are skipped otherwise.
 MIT. Note that pgRouting itself is GPL-2.0-or-later: duckrouting follows its
 *semantics* and is checked against its published *output*, but shares none of
 its source.
+
+The test data in `test/sql/` is adapted from pgRouting and licensed under
+CC BY-SA 3.0; see [test/README.md](test/README.md#test-data-licence).

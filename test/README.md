@@ -9,3 +9,7 @@ or
 ```bash
 make test_debug
 ```
+
+## Test data licence
+
+The sample network and expected results in `sql/` are adapted from the [pgRouting](https://github.com/pgRouting/pgrouting) project (`tools/testers/sampledata.pg`, `docqueries/` and `pgtap/`), © pgRouting developers, licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). The rest of the repository is MIT licensed.
