@@ -32,6 +32,9 @@ INSERT INTO edges VALUES
   (4, 6,  7, 1,  1), (5, 10, 11, 1, -1), (6, 1,  3,  1, 1);
 ```
 
+These edges are taken from pgRouting's sample network
+([CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/)).
+
 Then ask for a path:
 
 ```sql

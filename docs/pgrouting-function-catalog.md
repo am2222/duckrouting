@@ -30,6 +30,12 @@ reimplemented from the published algorithm rather than ported -- Yen's for
 `ksp`, Hierholzer's for `chinese_postman`, a bidirectional meet-in-the-middle
 for `bd_dijkstra`, and so on.
 
+The sample network used in the tests and in the examples on this site, and
+the expected results the tests check against, are adapted from pgRouting's
+`tools/testers/sampledata.pg`, `docqueries/` and `pgtap/`. Those files are
+© pgRouting developers and licensed under
+[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/), not GPL.
+
 ### The three that were left out
 
 `pgr_pickDeliver`, `pgr_pickDeliverEuclidean` and `pgr_vrpOneDepot` are vehicle
