@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/am2222/duckrouting/compare/v0.1.3...v0.1.4) (2026-09-30)
+
+
+### Features
+
+* **map-matching:** implement map matching algorithm and update demo ([6563fb8](https://github.com/am2222/duckrouting/commit/6563fb803e5f3f405e0fe11dd75b096696293434))
+
 ## [0.1.3](https://github.com/am2222/duckrouting/compare/v0.1.2...v0.1.3) (2026-09-23)
 
 
