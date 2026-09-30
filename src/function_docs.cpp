@@ -49,6 +49,7 @@ struct FunctionDoc {
 #define COST_CAPACITY_EDGES "'SELECT id, source, target, capacity, reverse_capacity, cost, reverse_cost FROM edges'"
 #define POINTS              "'SELECT pid, edge_id, fraction, side FROM poi'"
 #define RESTRICTIONS        "'SELECT path, cost FROM restrictions'"
+#define CANDIDATES          "'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates'"
 
 const FunctionDoc kFunctionDocs[] = {
     // --- metadata -----------------------------------------------------------
@@ -539,6 +540,24 @@ const FunctionDoc kFunctionDocs[] = {
      "SELECT * FROM duckrouting_with_points_dd(" EDGES ", " POINTS ", -1, 3.3, 'r', details => true);",
      {"routing", "isochrone"}},
 
+    // --- map matching -------------------------------------------------------
+    {"duckrouting_map_match",
+     {"edges_sql", "candidates_sql", "gps_error"},
+     "Snaps GPS trajectories onto the graph with a hidden Markov model (Fast Map Matching, Yang & Gidofalvi 2018). "
+     "candidates_sql lists the nearby edges of every fix as pid, edge_id, fraction, distance, x, y and an optional "
+     "traj_id -- what duckrouting_find_close_edges returns, joined back to the fix -- and gps_error is the GPS "
+     "noise in the units of distance. Returns one row per fix: seq, traj_id, pid, edge, fraction, distance, ep, "
+     "tp and sp_dist. A trajectory whose fixes cannot be joined produces no rows.",
+     "SELECT * FROM duckrouting_map_match(" EDGES ", " CANDIDATES ", 0.5);",
+     {"routing", "map matching"}},
+    {"duckrouting_map_match_path",
+     {"edges_sql", "candidates_sql", "gps_error"},
+     "The complete route through the network for each map-matched trajectory, with path_id the trajectory and "
+     "the first and last fixes as vertices -pid; returns seq, path_id, path_seq, start_vid, end_vid, node, edge, "
+     "cost and agg_cost. With details => true every fix appears as a vertex.",
+     "SELECT * FROM duckrouting_map_match_path(" EDGES ", " CANDIDATES ", 0.5);",
+     {"routing", "map matching"}},
+
     // --- turn restrictions --------------------------------------------------
     {"duckrouting_trsp",
      {"edges_sql", "restrictions_sql", "start_vid", "end_vid", "directed"},
@@ -677,11 +696,11 @@ duckdb::CreateTableFunctionInfo Documented(duckdb::TableFunctionSet set) {
 		description.parameter_types = arguments;
 		NamePositionalArguments(doc, arguments, description);
 		// duckdb_functions() lists named parameters after the positional ones,
-		// in the order the function's own map yields them, and falls back to
+		// in the order the function itself yields them, and falls back to
 		// `colN` for any name the description does not reach. Reading them back
 		// off the function is the only way to keep the two in step.
-		for (auto &named : function.named_parameters) {
-			description.parameter_names.push_back(NameText(named.first));
+		for (auto &named : NamedParameterNames(function)) {
+			description.parameter_names.push_back(named);
 		}
 		info.descriptions.push_back(description);
 	}

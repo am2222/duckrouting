@@ -485,10 +485,10 @@ void AStarCostScan(ClientContext &, TableFunctionInput &data, DataChunk &output)
 }
 
 void AddAStarOptions(TableFunction &function) {
-	function.named_parameters["directed"] = LogicalType::BOOLEAN;
-	function.named_parameters["heuristic"] = LogicalType::BIGINT;
-	function.named_parameters["factor"] = LogicalType::DOUBLE;
-	function.named_parameters["epsilon"] = LogicalType::DOUBLE;
+	AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
+	AddNamedParameter(function, "heuristic", LogicalType::BIGINT);
+	AddNamedParameter(function, "factor", LogicalType::DOUBLE);
+	AddNamedParameter(function, "epsilon", LogicalType::DOUBLE);
 }
 
 } // namespace

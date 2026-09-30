@@ -81,6 +81,8 @@ duckrouting_line_graph	2
 duckrouting_line_graph_full	1
 duckrouting_linear_contraction	2
 duckrouting_make_connected	1
+duckrouting_map_match	2
+duckrouting_map_match_path	2
 duckrouting_max_cardinality_match	1
 duckrouting_max_flow	4
 duckrouting_max_flow_min_cost	4
@@ -130,17 +132,18 @@ WHERE function_name LIKE 'duckrouting_%'
 # takes argument names from the FunctionDescription, so the answer is 0. DuckDB
 # 2.0 inverted that: names come from the function itself, and the description is
 # consulted only when the two disagree on how many there are -- which for a
-# table function never happens, because the v2 extractor emits one colN per
-# argument and there is no FunctionSignature to name them with, the way scalar
-# functions now have. So on 2.0 every function taking an argument reports colN
-# again: 297 of the 301 rows, all but the three macros, which carry their own
+# table function never happens, because a table function built from a list of
+# argument types gets one positional-only parameter per argument, named colN by
+# its FunctionSignature. So on 2.0 every function taking an argument reports colN
+# again: 301 of the 305 rows, all but the three macros, which carry their own
 # names, and the zero-argument duckrouting_full_version.
 #
 # Asserting that number rather than skipping the check keeps it a live test on
 # both versions: if DuckDB starts honouring the names again, this goes red and
-# says to delete the CASE.
+# says to delete the CASE. The plan for naming the parameters on 2.0, which
+# makes that happen, is in docs/UPDATING.md.
 query I
-SELECT count(*) = CASE WHEN version() LIKE 'v1.%' THEN 0 ELSE 297 END
+SELECT count(*) = CASE WHEN version() LIKE 'v1.%' THEN 0 ELSE 301 END
 FROM duckdb_functions()
 WHERE function_name LIKE 'duckrouting_%'
   AND len(list_filter(parameters, lambda name: regexp_matches(name, '^col[0-9]+$'))) > 0;

@@ -1,0 +1,87 @@
+# name: test/sql/map_match_spatial.test
+# description: map matching end to end, with candidates found by the spatial extension
+# group: [sql]
+
+#
+# The same FMM sample data as map_match.test, but here the candidates come
+# from duckrouting_find_close_edges rather than being written down, which is
+# how the function is meant to be used. FMM searched with k = 4 within a
+# radius of 0.4 and a gps_error of 0.5, and its results are in mr.txt.
+
+require duckrouting
+
+require spatial
+
+statement ok
+CREATE TABLE edges AS
+SELECT id, source, target, ST_Length(geom) AS cost, -1.0 AS reverse_cost, geom
+FROM (VALUES
+ (1,1,2,'LINESTRING(2 1,2 0)'),(2,2,1,'LINESTRING(2 0,2 1)'),(3,3,1,'LINESTRING(3 1,2 1)'),
+ (4,4,3,'LINESTRING(4 1,3 1)'),(5,1,5,'LINESTRING(2 1,2 2)'),(6,5,1,'LINESTRING(2 2,2 1)'),
+ (7,3,6,'LINESTRING(3 1,3 2)'),(8,7,8,'LINESTRING(0 2,1 2)'),(9,8,7,'LINESTRING(1 2,0 2)'),
+ (10,5,8,'LINESTRING(2 2,1 2)'),(11,8,5,'LINESTRING(1 2,2 2)'),(12,6,5,'LINESTRING(3 2,2 2)'),
+ (13,5,6,'LINESTRING(2 2,3 2)'),(14,6,9,'LINESTRING(3 2,4 2)'),(15,9,6,'LINESTRING(4 2,3 2)'),
+ (16,10,5,'LINESTRING(2 3,2 2)'),(17,5,10,'LINESTRING(2 2,2 3)'),(18,6,11,'LINESTRING(3 2,3 3)'),
+ (19,10,11,'LINESTRING(2 3,3 3)'),(20,11,12,'LINESTRING(3 3,4 3)'),(21,13,10,'LINESTRING(2 4,2 3)'),
+ (22,10,13,'LINESTRING(2 3,2 4)'),(23,9,12,'LINESTRING(4 2,4 3)'),(24,12,9,'LINESTRING(4 3,4 2)'),
+ (25,9,4,'LINESTRING(4 2,4 1)'),(26,4,9,'LINESTRING(4 1,4 2)'),(27,14,15,'LINESTRING(0.5 3.5,2 3.5)'),
+ (28,15,14,'LINESTRING(2 3.5,0.5 3.5)'),(29,16,17,'LINESTRING(3.5 4,3.5 2.3)'),(30,17,16,'LINESTRING(3.5 2.3,3.5 4)')
+) AS t(id, source, target, wkt), LATERAL (SELECT ST_GeomFromText(wkt) AS geom);
+
+statement ok
+CREATE TABLE trips AS
+SELECT id, ST_GeomFromText(wkt) AS geom FROM (VALUES
+ (1, 'LINESTRING(1.65889830508474 0.25098870056497,1.65494350282486 0.701836158192091,2.4933615819209 1.76567796610169,3.54929378531073 1.88827683615819,4.13064971751412 2.45776836158192)'),
+ (2, 'LINESTRING(4.15042372881356 1.60353107344633,3.47019774011299 0.923305084745761,2.40635593220339 0.923305084745761,2.14533898305084 1.53234463276836,2.08601694915254 2.57641242937853,2.49731638418079 2.98771186440678)'),
+ (3, 'LINESTRING(0.200812146892656 2.14088983050848,1.44262005649717 2.14879943502825,3.06408898305084 2.16066384180791,3.06408898305084 2.7103813559322,3.70872175141242 2.97930790960452,4.11606638418078 2.62337570621469)')
+) AS t(id, wkt);
+
+# One row per GPS fix, numbered along its trip.
+statement ok
+CREATE TABLE fixes AS
+SELECT id AS traj_id, id * 100 + d.path[1] AS pid, d.path[1] AS seq, d.geom AS geom
+FROM (SELECT id, unnest(ST_Dump(ST_Points(geom))) AS d FROM trips);
+
+# The four closest edges within 0.4 of each fix, in the shape map matching wants.
+statement ok
+CREATE TABLE candidates AS
+SELECT f.traj_id, f.pid, c.edge_id, c.fraction, c.distance, ST_X(f.geom) AS x, ST_Y(f.geom) AS y
+FROM duckrouting_find_close_edges('edges', 'fixes', tolerance => 0.4, cap => 4) c
+JOIN fixes f USING (pid);
+
+query II
+SELECT path_id, list(edge ORDER BY path_seq) FILTER (WHERE edge <> -1) FROM duckrouting_map_match_path(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', 0.5)
+GROUP BY path_id ORDER BY path_id;
+----
+1	[2, 5, 13, 14, 23]
+2	[25, 4, 3, 5, 17, 19]
+3	[8, 11, 13, 18, 20, 24]
+
+# The matched geometry, rebuilt from the path with details: a partial edge
+# wherever a matched point starts or ends a step, a whole edge elsewhere. FMM
+# reports LINESTRING(2 0.250988700565,2 1,2 2,3 2,4 2,4 2.45776836158) for
+# trip 1, which is 4.20678 long.
+
+query IR
+WITH path AS (
+  SELECT node, edge, lead(node) OVER (ORDER BY path_seq) AS next_node
+  FROM duckrouting_map_match_path(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', 0.5, details => true)
+  WHERE path_id = 1
+), matched AS (
+  SELECT pid, fraction FROM duckrouting_map_match(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', 0.5)
+  WHERE traj_id = 1
+)
+SELECT count(*), round(sum(ST_Length(ST_LineSubstring(e.geom, coalesce(a.fraction, 0), coalesce(b.fraction, 1)))), 6)
+FROM path p
+JOIN edges e ON e.id = p.edge
+LEFT JOIN matched a ON a.pid = -p.node
+LEFT JOIN matched b ON b.pid = -p.next_node
+WHERE p.edge <> -1;
+----
+8	4.20678

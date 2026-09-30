@@ -374,11 +374,11 @@ TableFunctionSet ContractSet(const char *name, bool with_method_options) {
 			arguments.push_back(LogicalType::BOOLEAN);
 		}
 		TableFunction function(arguments, ContractScan, ContractBind<Fixed>, ContractInit);
-		function.named_parameters["directed"] = LogicalType::BOOLEAN;
-		function.named_parameters["forbidden"] = LogicalType::LIST(LogicalType::BIGINT);
+		AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
+		AddNamedParameter(function, "forbidden", LogicalType::LIST(LogicalType::BIGINT));
 		if (with_method_options) {
-			function.named_parameters["methods"] = LogicalType::LIST(LogicalType::BIGINT);
-			function.named_parameters["cycles"] = LogicalType::BIGINT;
+			AddNamedParameter(function, "methods", LogicalType::LIST(LogicalType::BIGINT));
+			AddNamedParameter(function, "cycles", LogicalType::BIGINT);
 		}
 		set.AddFunction(function);
 	}

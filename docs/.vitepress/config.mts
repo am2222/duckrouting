@@ -54,7 +54,8 @@ export default defineConfig({
           { text: 'Graph analysis', link: '/functions/analysis' },
           { text: 'Maximum flow', link: '/functions/flow' },
           { text: 'Travelling salesman', link: '/functions/tsp' },
-          { text: 'Contraction & points', link: '/functions/contraction' }
+          { text: 'Contraction & points', link: '/functions/contraction' },
+          { text: 'Map matching', link: '/functions/map-matching' }
         ]
       },
       {

@@ -6,6 +6,7 @@
 #include "duckrouting/yen.hpp"
 
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 namespace duckrouting {
@@ -274,6 +275,50 @@ std::vector<DrivingDistanceRow> WithPointsDrivingDistance(const std::vector<Edge
                                                           const std::vector<PointOnEdge> &points,
                                                           const std::vector<int64_t> &starts, double distance,
                                                           char driving_side, bool directed, bool details);
+
+//! Map matching parameters, named as FMM names them.
+struct MapMatchOptions {
+	//! Standard deviation of the GPS noise, in the units `distance` is in.
+	double gps_error = 50;
+	//! Upper bound on the shortest-path search between consecutive fixes;
+	//! candidates further apart than this cannot follow one another.
+	double delta = std::numeric_limits<double>::infinity();
+	//! How far back along the same edge a fix may step, as a fraction of the
+	//! edge, before it counts as a trip round the block rather than jitter.
+	double reverse_tolerance = 0;
+	bool directed = true;
+};
+
+//! One matched GPS fix: the candidate chosen for it, its emission
+//! probability, and the transition probability and shortest-path distance
+//! from the fix before it (both 0 for the first fix of a trajectory).
+struct MatchedPointRow {
+	int64_t traj_id;
+	int64_t pid;
+	int64_t edge;
+	double fraction;
+	double distance;
+	double ep;
+	double tp;
+	double sp_dist;
+};
+
+//! Snaps each trajectory onto the graph with a hidden Markov model, after
+//! Fast Map Matching (Yang & Gidofalvi, 2018). Every fix is reported with the
+//! edge it was matched to; a trajectory with a fix that cannot be reached from
+//! the one before it is unmatched and produces no rows.
+std::vector<MatchedPointRow> MapMatch(const std::vector<EdgeRow> &edges, const std::vector<Candidate> &candidates,
+                                      const MapMatchOptions &options);
+
+//! The complete route through the network for each matched trajectory --
+//! FMM's cpath -- in the KSP shape with path_id the trajectory. Fixes are the
+//! vertices -pid; without `details` only the first and last remain visible
+//! and the segments of the hidden ones are merged into the row before.
+std::vector<KspRow> MapMatchPath(const std::vector<EdgeRow> &edges, const std::vector<Candidate> &candidates,
+                                 const MapMatchOptions &options, bool details);
+
+duckdb::TableFunctionSet GetMapMatchFunction();
+duckdb::TableFunctionSet GetMapMatchPathFunction();
 
 //! A vertex with the edges entering and leaving it.
 struct VertexEdgesRow {

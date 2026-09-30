@@ -40,7 +40,8 @@ set(EXTENSION_SOURCES
     src/contract_ops.cpp
     src/geometry.cpp
     src/transform.cpp
-    src/trsp.cpp)
+    src/trsp.cpp
+    src/map_match.cpp)
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})

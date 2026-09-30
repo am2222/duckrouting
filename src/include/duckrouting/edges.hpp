@@ -119,6 +119,25 @@ struct PointOnEdge {
 //! Reads a query exposing pid, edge_id, fraction and the optional side.
 std::vector<PointOnEdge> LoadPointsOnEdges(duckdb::ClientContext &context, const std::string &points_sql);
 
+//! One candidate edge for one GPS fix, in the shape duckrouting_find_close_edges
+//! reports: the edge, how far along it the fix projects, and how far away the
+//! fix is. `x` and `y` are the fix itself, for the straight-line distance
+//! between consecutive fixes. `traj_id` groups fixes into trajectories and
+//! `pid` orders them within one.
+struct Candidate {
+	int64_t traj_id;
+	int64_t pid;
+	int64_t edge_id;
+	double fraction;
+	double distance;
+	double x;
+	double y;
+};
+
+//! Reads a query exposing pid, edge_id, fraction, distance, x, y and the
+//! optional traj_id, which defaults to 1.
+std::vector<Candidate> LoadCandidates(duckdb::ClientContext &context, const std::string &candidates_sql);
+
 //! A turn restriction: following this exact sequence of edges costs extra. A
 //! large cost effectively forbids the turn.
 struct Restriction {

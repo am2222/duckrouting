@@ -12,4 +12,4 @@ make test_debug
 
 ## Test data licence
 
-The sample network and expected results in `sql/` are adapted from the [pgRouting](https://github.com/pgRouting/pgrouting) project (`tools/testers/sampledata.pg`, `docqueries/` and `pgtap/`), © pgRouting developers, licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). The rest of the repository is MIT licensed.
+The sample network and expected results in `sql/` are adapted from the [pgRouting](https://github.com/pgRouting/pgrouting) project (`tools/testers/sampledata.pg`, `docqueries/` and `pgtap/`), © pgRouting developers, licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). The road network, trajectories and expected matches in `sql/map_match.test` and `sql/map_match_spatial.test` are the sample data of [FMM](https://github.com/cyang-kth/fmm) (`example/data`), © Can Yang, licensed under [Apache-2.0](https://github.com/cyang-kth/fmm/blob/master/LICENSE). The rest of the repository is MIT licensed.

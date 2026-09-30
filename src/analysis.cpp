@@ -688,7 +688,7 @@ TableFunctionSet GetBetweennessCentralityFunction() {
 			arguments.push_back(LogicalType::BOOLEAN);
 		}
 		TableFunction function(arguments, CentralityScan, CentralityBind, CentralityInit);
-		function.named_parameters["directed"] = LogicalType::BOOLEAN;
+		AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
 		set.AddFunction(function);
 	}
 	return set;

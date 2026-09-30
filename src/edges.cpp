@@ -413,6 +413,70 @@ std::vector<PointOnEdge> LoadPointsOnEdges(ClientContext &context, const string 
 	return points;
 }
 
+std::vector<Candidate> LoadCandidates(ClientContext &context, const string &candidates_sql) {
+	Connection connection(DatabaseInstance::GetDatabase(context));
+
+	auto prepared = connection.Prepare("SELECT * FROM (" + candidates_sql + ") AS __duckrouting_candidates");
+	if (prepared->HasError()) {
+		throw BinderException("duckrouting: could not prepare the candidates query: %s", prepared->GetError());
+	}
+	const auto &names = prepared->GetNames();
+	const char *required[] = {"pid", "edge_id", "fraction", "distance", "x", "y"};
+	for (size_t i = 0; i < 6; i++) {
+		RequireColumn(names, required[i]);
+	}
+	const bool has_traj_id = HasColumn(names, "traj_id");
+
+	string projection = "SELECT ";
+	// A single trajectory need not say so.
+	projection += has_traj_id ? "CAST(traj_id AS BIGINT) AS traj_id, " : "CAST(1 AS BIGINT) AS traj_id, ";
+	projection += "CAST(pid AS BIGINT) AS pid, CAST(edge_id AS BIGINT) AS edge_id, "
+	              "CAST(fraction AS DOUBLE) AS fraction, CAST(distance AS DOUBLE) AS distance, "
+	              "CAST(x AS DOUBLE) AS x, CAST(y AS DOUBLE) AS y "
+	              "FROM (" +
+	              candidates_sql + ") AS __duckrouting_candidates";
+
+	auto result = connection.Query(projection);
+	if (result->HasError()) {
+		throw InvalidInputException("duckrouting: the candidates query failed: %s", result->GetError());
+	}
+
+	std::vector<Candidate> candidates;
+	while (true) {
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+		chunk->Flatten();
+		auto traj_ids = FlatVector::GetData<int64_t>(chunk->data[0]);
+		auto pids = FlatVector::GetData<int64_t>(chunk->data[1]);
+		auto edge_ids = FlatVector::GetData<int64_t>(chunk->data[2]);
+		auto fractions = FlatVector::GetData<double>(chunk->data[3]);
+		auto distances = FlatVector::GetData<double>(chunk->data[4]);
+		auto xs = FlatVector::GetData<double>(chunk->data[5]);
+		auto ys = FlatVector::GetData<double>(chunk->data[6]);
+
+		for (duckdb::idx_t row = 0; row < chunk->size(); row++) {
+			for (duckdb::idx_t col = 0; col < 7; col++) {
+				if (!FlatVector::Validity(chunk->data[col]).RowIsValid(row)) {
+					throw InvalidInputException(
+					    "duckrouting: the candidates query returned NULL in traj_id, pid, edge_id, fraction, "
+					    "distance, x or y");
+				}
+			}
+			if (fractions[row] < 0 || fractions[row] > 1) {
+				throw InvalidInputException("duckrouting: 'fraction' must be between 0 and 1");
+			}
+			if (distances[row] < 0) {
+				throw InvalidInputException("duckrouting: 'distance' must not be negative");
+			}
+			candidates.push_back(
+			    Candidate {traj_ids[row], pids[row], edge_ids[row], fractions[row], distances[row], xs[row], ys[row]});
+		}
+	}
+	return candidates;
+}
+
 std::vector<Restriction> LoadRestrictions(ClientContext &context, const string &restrictions_sql) {
 	Connection connection(DatabaseInstance::GetDatabase(context));
 
@@ -431,24 +495,32 @@ std::vector<Restriction> LoadRestrictions(ClientContext &context, const string &
 		throw InvalidInputException("duckrouting: the restrictions query failed: %s", result->GetError());
 	}
 
+	// Read chunk by chunk, like the other loaders: v2's Connection::Query no
+	// longer promises a materialised result with random access.
 	std::vector<Restriction> restrictions;
-	for (duckdb::idx_t row = 0; row < result->RowCount(); row++) {
-		auto path_value = result->GetValue(0, row);
-		auto cost_value = result->GetValue(1, row);
-		if (path_value.IsNull() || cost_value.IsNull()) {
-			continue;
+	while (true) {
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
 		}
-		Restriction restriction {};
-		for (auto &child : duckdb::ListValue::GetChildren(path_value)) {
-			if (!child.IsNull()) {
-				restriction.path.push_back(child.GetValue<int64_t>());
+		for (duckdb::idx_t row = 0; row < chunk->size(); row++) {
+			auto path_value = chunk->GetValue(0, row);
+			auto cost_value = chunk->GetValue(1, row);
+			if (path_value.IsNull() || cost_value.IsNull()) {
+				continue;
 			}
+			Restriction restriction {};
+			for (auto &child : duckdb::ListValue::GetChildren(path_value)) {
+				if (!child.IsNull()) {
+					restriction.path.push_back(child.GetValue<int64_t>());
+				}
+			}
+			if (restriction.path.empty()) {
+				continue;
+			}
+			restriction.cost = cost_value.GetValue<double>();
+			restrictions.push_back(restriction);
 		}
-		if (restriction.path.empty()) {
-			continue;
-		}
-		restriction.cost = cost_value.GetValue<double>();
-		restrictions.push_back(restriction);
 	}
 	return restrictions;
 }

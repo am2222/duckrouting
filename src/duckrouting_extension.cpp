@@ -132,6 +132,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(Documented(duckrouting::GetChinesePostmanFunction()));
 	loader.RegisterFunction(Documented(duckrouting::GetChinesePostmanCostFunction()));
 
+	loader.RegisterFunction(Documented(duckrouting::GetMapMatchFunction()));
+	loader.RegisterFunction(Documented(duckrouting::GetMapMatchPathFunction()));
+
 	duckrouting::RegisterGeometryMacros(loader);
 }
 

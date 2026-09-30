@@ -82,6 +82,22 @@ with [`duckrouting_tsp`](/functions/tsp), then hands that order to
 turn it back into streets. The tour re-solves on every new stop, and the order
 it chose is printed with the result — rarely the order you clicked.
 
+**Map matching** is the one mode where your clicks are *not* snapped to a
+junction. Each click is a GPS fix, dropped exactly where it fell, and
+[`duckrouting_map_match_path`](/functions/map-matching) works out which
+streets a vehicle reporting those fixes must have driven along. Click a few
+points along a route, a little off the street as a phone would, and the
+matched route is drawn under them with a tie from each fix to where it landed.
+The gps error slider is how noisy the fixes are assumed to be; turn it down and
+a fix far from any street becomes impossible to explain, and the trace comes
+back unmatched.
+
+The nearby-edge search for each fix — normally
+[`duckrouting_find_close_edges`](/functions/contraction) over the spatial
+extension — is done in the browser here, since loading spatial would be another
+download for a single mode. It is handed to DuckDB as the `candidates` table you
+see in the SQL; the matching itself is entirely the query.
+
 ## Whole network
 
 These four need no clicks. They run over all 1,912 streets at once and say

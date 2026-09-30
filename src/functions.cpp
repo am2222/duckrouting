@@ -418,7 +418,7 @@ TableFunctionSet GetDijkstraFunction() {
 					arguments.push_back(LogicalType::BOOLEAN);
 				}
 				TableFunction function(arguments, DijkstraScan, DijkstraBind, DijkstraInit);
-				function.named_parameters["directed"] = LogicalType::BOOLEAN;
+				AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
 				set.AddFunction(function);
 			}
 		}
@@ -437,7 +437,7 @@ TableFunctionSet GetDijkstraCostFunction() {
 					arguments.push_back(LogicalType::BOOLEAN);
 				}
 				TableFunction function(arguments, CostScan, CostBind, CostInit);
-				function.named_parameters["directed"] = LogicalType::BOOLEAN;
+				AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
 				set.AddFunction(function);
 			}
 		}
@@ -453,7 +453,7 @@ TableFunctionSet GetDijkstraCostMatrixFunction() {
 			arguments.push_back(LogicalType::BOOLEAN);
 		}
 		TableFunction function(arguments, CostScan, CostMatrixBind, CostInit);
-		function.named_parameters["directed"] = LogicalType::BOOLEAN;
+		AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
 		set.AddFunction(function);
 	}
 	return set;
@@ -468,8 +468,8 @@ TableFunctionSet GetDrivingDistanceFunction() {
 				arguments.push_back(LogicalType::BOOLEAN);
 			}
 			TableFunction function(arguments, DrivingDistanceScan, DrivingDistanceBind, DrivingDistanceInit);
-			function.named_parameters["directed"] = LogicalType::BOOLEAN;
-			function.named_parameters["equicost"] = LogicalType::BOOLEAN;
+			AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
+			AddNamedParameter(function, "equicost", LogicalType::BOOLEAN);
 			set.AddFunction(function);
 		}
 	}
@@ -486,9 +486,9 @@ TableFunctionSet GetDijkstraViaFunction() {
 			arguments.push_back(LogicalType::BOOLEAN);
 		}
 		TableFunction function(arguments, ViaScan, ViaBind, ViaInit);
-		function.named_parameters["directed"] = LogicalType::BOOLEAN;
-		function.named_parameters["strict"] = LogicalType::BOOLEAN;
-		function.named_parameters["u_turn_on_edge"] = LogicalType::BOOLEAN;
+		AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
+		AddNamedParameter(function, "strict", LogicalType::BOOLEAN);
+		AddNamedParameter(function, "u_turn_on_edge", LogicalType::BOOLEAN);
 		set.AddFunction(function);
 	}
 	return set;
@@ -505,8 +505,8 @@ TableFunctionSet GetDijkstraNearFunction() {
 					arguments.push_back(LogicalType::BOOLEAN);
 				}
 				TableFunction function(arguments, DijkstraScan, NearBind, NearInit);
-				function.named_parameters["directed"] = LogicalType::BOOLEAN;
-				function.named_parameters["cap"] = LogicalType::BIGINT;
+				AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
+				AddNamedParameter(function, "cap", LogicalType::BIGINT);
 				set.AddFunction(function);
 			}
 		}
@@ -525,8 +525,8 @@ TableFunctionSet GetDijkstraNearCostFunction() {
 					arguments.push_back(LogicalType::BOOLEAN);
 				}
 				TableFunction function(arguments, CostScan, NearCostBind, NearCostInit);
-				function.named_parameters["directed"] = LogicalType::BOOLEAN;
-				function.named_parameters["cap"] = LogicalType::BIGINT;
+				AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
+				AddNamedParameter(function, "cap", LogicalType::BIGINT);
 				set.AddFunction(function);
 			}
 		}
@@ -545,8 +545,8 @@ TableFunctionSet GetKspFunction() {
 					arguments.push_back(LogicalType::BOOLEAN);
 				}
 				TableFunction function(arguments, KspScan, KspBind, KspInit);
-				function.named_parameters["directed"] = LogicalType::BOOLEAN;
-				function.named_parameters["heap_paths"] = LogicalType::BOOLEAN;
+				AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
+				AddNamedParameter(function, "heap_paths", LogicalType::BOOLEAN);
 				set.AddFunction(function);
 			}
 		}
