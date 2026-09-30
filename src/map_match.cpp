@@ -302,10 +302,14 @@ std::vector<KspRow> BuildPath(const std::vector<EdgeRow> &edges, const std::vect
 
 	if (!details) {
 		// Hide the fixes in between: each one's segment is folded into the
-		// row before it, so the edge appears once with its whole cost.
+		// row before it, so an edge appears once with its whole cost. The
+		// same goes for any further piece of the edge just reported -- a fix
+		// sitting exactly on an endpoint is joined to it by a free edge, and
+		// that piece is not a second traversal.
 		std::vector<KspRow> merged;
 		for (size_t i = 0; i < rows.size(); i++) {
-			if (rows[i].node < 0 && i > 0 && i + 1 < rows.size()) {
+			const bool inner = i > 0 && i + 1 < rows.size();
+			if (inner && (rows[i].node < 0 || rows[i].edge == merged.back().edge)) {
 				merged.back().cost += rows[i].cost;
 				continue;
 			}

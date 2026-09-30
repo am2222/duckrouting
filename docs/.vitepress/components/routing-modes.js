@@ -50,6 +50,102 @@ function points(ids, ctx, properties) {
 
 const line = (color, width, opacity = 1) => ({ color, width, opacity })
 
+// --- geometry for map matching --------------------------------------------
+//
+// Map matching needs, for every GPS fix, the nearby edges with the fraction
+// along each where the fix projects and the distance to that point. With the
+// spatial extension that is one call to duckrouting_find_close_edges, but
+// loading spatial into the browser is another sizeable download for a single
+// mode, so the projection is done here in a few lines and handed to DuckDB
+// as a table. Everything the algorithm does then happens in SQL.
+//
+// Coordinates go through an equirectangular projection centred on the map, so
+// distances come out in metres -- the same unit as `cost` -- which is what
+// the transition probability compares them against.
+
+const CENTRE = [4.889, 52.372]
+const METRES_PER_DEG_LAT = 110574
+const METRES_PER_DEG_LON = 111320 * Math.cos(CENTRE[1] * Math.PI / 180)
+
+const project = ([lon, lat]) =>
+  [(lon - CENTRE[0]) * METRES_PER_DEG_LON, (lat - CENTRE[1]) * METRES_PER_DEG_LAT]
+const unproject = ([x, y]) =>
+  [x / METRES_PER_DEG_LON + CENTRE[0], y / METRES_PER_DEG_LAT + CENTRE[1]]
+
+// Projected polylines, computed once per feature.
+const projected = new WeakMap()
+function polyline(feature) {
+  let coords = projected.get(feature)
+  if (!coords) {
+    coords = feature.geometry.coordinates.map(project)
+    projected.set(feature, coords)
+  }
+  return coords
+}
+
+/** Closest point on a polyline to `p`: its distance, and the fraction of the
+ *  polyline's length at which it lies. */
+function closestOn(coords, p) {
+  let best = { distance: Infinity, along: 0, point: coords[0] }
+  let length = 0
+  for (let i = 0; i + 1 < coords.length; i++) {
+    const [ax, ay] = coords[i]
+    const [bx, by] = coords[i + 1]
+    const dx = bx - ax
+    const dy = by - ay
+    const len2 = dx * dx + dy * dy
+    let t = len2 ? ((p[0] - ax) * dx + (p[1] - ay) * dy) / len2 : 0
+    t = Math.max(0, Math.min(1, t))
+    const point = [ax + t * dx, ay + t * dy]
+    const distance = Math.hypot(p[0] - point[0], p[1] - point[1])
+    if (distance < best.distance) best = { distance, along: length + t * Math.sqrt(len2), point }
+    length += Math.sqrt(len2)
+  }
+  return { distance: best.distance, fraction: length ? best.along / length : 0 }
+}
+
+/** The point `fraction` of the way along a polyline, in lon/lat. */
+function pointAt(coords, fraction) {
+  const lengths = []
+  let total = 0
+  for (let i = 0; i + 1 < coords.length; i++) {
+    const l = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1])
+    lengths.push(l)
+    total += l
+  }
+  let remaining = fraction * total
+  for (let i = 0; i < lengths.length; i++) {
+    if (remaining <= lengths[i] || i === lengths.length - 1) {
+      const t = lengths[i] ? Math.min(1, remaining / lengths[i]) : 0
+      return unproject([
+        coords[i][0] + t * (coords[i + 1][0] - coords[i][0]),
+        coords[i][1] + t * (coords[i + 1][1] - coords[i][1])
+      ])
+    }
+    remaining -= lengths[i]
+  }
+  return unproject(coords[coords.length - 1])
+}
+
+/** The `k` nearest edges within `radius` metres of each fix, in the shape
+ *  duckrouting_map_match wants. */
+function candidates(fixes, ctx, radius, k) {
+  const rows = []
+  fixes.forEach((lngLat, i) => {
+    const p = project(lngLat)
+    const near = []
+    for (const [id, feature] of ctx.featureById) {
+      const hit = closestOn(polyline(feature), p)
+      if (hit.distance <= radius) near.push({ edge_id: id, ...hit })
+    }
+    near.sort((a, b) => a.distance - b.distance || a.edge_id - b.edge_id)
+    for (const c of near.slice(0, k)) {
+      rows.push({ pid: i + 1, edge_id: c.edge_id, fraction: c.fraction, distance: c.distance, x: p[0], y: p[1] })
+    }
+  })
+  return rows
+}
+
 export const MODES = {
   // --- pick points ---------------------------------------------------------
 
@@ -206,6 +302,62 @@ export const MODES = {
         paint: { upper: line(CRIMSON, 4), points: { color: INK, radius: 6 } },
         summary: `${stops.length} stops · ${Math.round(total)} m · ` +
           `order ${visits.join(' → ')}`
+      }
+    }
+  },
+
+  map_match: {
+    label: 'Map matching',
+    group: 'points',
+    needs: 'many',
+    minimum: 2,
+    raw: true,
+    hint: 'Click along a route to drop GPS fixes — they need not be on a street.',
+    more: 'Keep clicking to extend the trace.',
+    slider: { key: 'gps_error', min: 5, max: 80, step: 5, unit: ' m', label: 'gps error' },
+    legend: [[INK, 'GPS fixes — your clicks'], [SKY, 'where each fix was matched'], [CRIMSON, 'matched route']],
+    async run(ctx) {
+      const fixes = ctx.stops
+      // Search a little beyond the noise level: a fix three standard
+      // deviations off its street is still meant to be on it.
+      const radius = Math.max(40, 3 * ctx.gps_error)
+      const found = candidates(fixes, ctx, radius, 6)
+      if (!found.length) {
+        return { sql: '', summary: `no street within ${radius} m of any fix` }
+      }
+      const values = found.map(c =>
+        `  (${c.pid}, ${c.edge_id}, ${c.fraction.toFixed(4)}, ${c.distance.toFixed(1)}, ${c.x.toFixed(1)}, ${c.y.toFixed(1)})`)
+      const table = `CREATE OR REPLACE TABLE candidates AS SELECT * FROM (VALUES\n${values.join(',\n')}\n) AS t(pid, edge_id, fraction, distance, x, y)`
+      const CANDIDATES = `'SELECT pid, edge_id, fraction, distance, x, y FROM candidates'`
+      const matchSql = `SELECT pid, edge, fraction, ep, tp FROM duckrouting_map_match(${EDGES}, ${CANDIDATES}, ${ctx.gps_error}.0)`
+      const pathSql = `SELECT path_seq, node, edge, cost, agg_cost FROM duckrouting_map_match_path(${EDGES}, ${CANDIDATES}, ${ctx.gps_error}.0)`
+      await ctx.query(table)
+      const [matched, path] = await Promise.all([ctx.query(matchSql), ctx.query(pathSql)])
+      const sql = [table + ';', matchSql + ';', pathSql].join('\n')
+
+      const used = path.map(r => Number(r.edge)).filter(e => e > 0)
+      const total = path.reduce((m, r) => Math.max(m, Number(r.agg_cost)), 0)
+      // Where each fix landed, and a tie from the fix to that point.
+      const landed = []
+      const ties = []
+      for (const r of matched) {
+        const feature = ctx.featureById.get(Number(r.edge))
+        if (!feature) continue
+        const at = pointAt(polyline(feature), Number(r.fraction))
+        const fix = fixes[Number(r.pid) - 1]
+        landed.push({ type: 'Feature', geometry: { type: 'Point', coordinates: at }, properties: { pid: Number(r.pid) } })
+        ties.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [fix, at] }, properties: {} })
+      }
+      const unmatched = matched.length < fixes.length
+      return {
+        sql,
+        lower: ties,
+        upper: edges(used, ctx),
+        points: landed,
+        paint: { lower: line(SKY, 1.5, 0.9), upper: line(CRIMSON, 4.5), points: { color: SKY, radius: 4 } },
+        summary: unmatched
+          ? `unmatched — no route joins those ${fixes.length} fixes; try fixes closer together or a larger gps error`
+          : `${fixes.length} fixes · ${used.length} edges · ${Math.round(total)} m`
       }
     }
   },

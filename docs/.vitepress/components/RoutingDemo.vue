@@ -26,8 +26,8 @@ const status = ref('loading the network…')
 const engine = ref('cold') // cold | starting | ready | failed
 const mode = ref('dijkstra')
 const picked = ref([])
-const radius = ref(600)
-const k = ref(3)
+// One value per slider key; a mode's slider edits the entry it names.
+const params = ref({ radius: 600, k: 3, gps_error: 20 })
 const sql = ref('')
 const result = ref('')
 const busy = ref(false)
@@ -54,7 +54,7 @@ const hint = computed(() => {
   if (m.needs === 0) return ''
   if (m.needs === 'many') {
     const short = m.minimum - picked.value.length
-    return short > 0 ? m.hint : 'Click more stops to extend the tour.'
+    return short > 0 ? m.hint : (m.more ?? 'Click more stops to extend the tour.')
   }
   return picked.value.length < m.needs ? m.hint : ''
 })
@@ -101,8 +101,7 @@ async function run() {
     const out = await m.run({
       query: async statement => (await conn.value.query(statement)).toArray(),
       stops: [...picked.value],
-      radius: radius.value,
-      k: k.value,
+      ...params.value,
       featureById,
       vertices
     })
@@ -182,10 +181,12 @@ function setMode(next) {
 function showPicked() {
   map.value.getSource('picked').setData({
     type: 'FeatureCollection',
+    // A stop is a vertex id, or a raw [lon, lat] for a mode that asked for
+    // clicks as they are.
     features: picked.value.map(v => ({
       type: 'Feature',
-      geometry: { type: 'Point', coordinates: vertices.get(v) },
-      properties: { id: v }
+      geometry: { type: 'Point', coordinates: Array.isArray(v) ? v : vertices.get(v) },
+      properties: { id: Array.isArray(v) ? null : v }
     }))
   })
 }
@@ -271,7 +272,9 @@ onMounted(async () => {
   map.value.on('click', event => {
     const m = current.value
     if (engine.value !== 'ready' || busy.value || m.needs === 0) return
-    const id = nearestVertex(event.lngLat)
+    // Map matching wants the click where it fell: a GPS fix is noisy by
+    // nature, and snapping it to a junction would hide the whole point.
+    const id = m.raw ? [event.lngLat.lng, event.lngLat.lat] : nearestVertex(event.lngLat)
     if (m.needs === 'many') {
       // The tour grows as stops are added, and re-solves on every click once
       // there are enough of them to be a tour at all.
@@ -312,13 +315,11 @@ onUnmounted(() => {
           <input
             type="range"
             :min="current.slider.min" :max="current.slider.max" :step="current.slider.step"
-            :value="current.slider.key === 'radius' ? radius : k"
-            @input="current.slider.key === 'radius'
-              ? radius = Number($event.target.value)
-              : k = Number($event.target.value)"
+            :value="params[current.slider.key]"
+            @input="params[current.slider.key] = Number($event.target.value)"
             @change="run"
           />
-          {{ current.slider.key === 'radius' ? radius : k }}{{ current.slider.unit }}
+          {{ params[current.slider.key] }}{{ current.slider.unit }}
         </label>
       </template>
       <button

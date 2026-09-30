@@ -210,6 +210,40 @@ WHERE path_id = 1 ORDER BY path_seq;
 9	23	0.457768
 -5	-1	0
 
+# A fix projecting exactly onto the end of an edge is that endpoint, joined by
+# a free edge. Without details the edge is still reported once, not once per
+# piece it was split into.
+
+statement ok
+CREATE TABLE at_end(pid BIGINT, edge_id BIGINT, fraction DOUBLE, distance DOUBLE, x DOUBLE, y DOUBLE);
+
+statement ok
+INSERT INTO at_end VALUES (1, 13, 0.2, 0.05, 2.2, 2.05), (2, 13, 1.0, 0.05, 3.0, 2.05), (3, 14, 0.5, 0.05, 3.5, 2.05);
+
+query IIR
+SELECT node, edge, round(cost, 6) FROM duckrouting_map_match_path(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, distance, x, y FROM at_end', 0.5)
+ORDER BY path_seq;
+----
+-1	13	0.8
+6	14	0.5
+-3	-1	0
+
+# With details the pieces are all there: the fix sits on vertex 6 by a
+# zero-cost edge in each direction.
+query IIR
+SELECT node, edge, round(cost, 6) FROM duckrouting_map_match_path(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, distance, x, y FROM at_end', 0.5, details => true)
+ORDER BY path_seq;
+----
+-1	13	0.8
+6	13	0
+-2	13	0
+6	14	0.5
+-3	-1	0
+
 # ---------------------------------------------------------------------------
 # Unmatched trajectories
 # ---------------------------------------------------------------------------
