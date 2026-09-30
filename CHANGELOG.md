@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.5](https://github.com/am2222/duckrouting/compare/v0.1.4...v0.1.5) (2026-09-30)
+
+
+### Features
+
+* **demo:** enhance service area description and alpha shape computation ([1b95365](https://github.com/am2222/duckrouting/commit/1b953655a461e4bf099a7edd407b921690d7072f))
+* **routing-modes:** add area feature to routing modes and alpha shape logic ([1b95365](https://github.com/am2222/duckrouting/commit/1b953655a461e4bf099a7edd407b921690d7072f))
+
+
+### Bug Fixes
+
+* **workflows:** update DuckDB version to v1.5.6 in CI workflows ([1b95365](https://github.com/am2222/duckrouting/commit/1b953655a461e4bf099a7edd407b921690d7072f))
+
 ## [0.1.4](https://github.com/am2222/duckrouting/compare/v0.1.3...v0.1.4) (2026-09-30)
 
 
