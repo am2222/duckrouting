@@ -300,9 +300,9 @@ void KspScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 }
 
 void AddCommonOptions(TableFunction &function) {
-	function.named_parameters["directed"] = LogicalType::BOOLEAN;
-	function.named_parameters["driving_side"] = LogicalType::VARCHAR;
-	function.named_parameters["details"] = LogicalType::BOOLEAN;
+	AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
+	AddNamedParameter(function, "driving_side", LogicalType::VARCHAR);
+	AddNamedParameter(function, "details", LogicalType::BOOLEAN);
 }
 
 } // namespace
@@ -374,8 +374,8 @@ TableFunctionSet GetWithPointsViaFunction() {
 		}
 		TableFunction function(arguments, ViaScan, ViaBind, ViaInit);
 		AddCommonOptions(function);
-		function.named_parameters["strict"] = LogicalType::BOOLEAN;
-		function.named_parameters["u_turn_on_edge"] = LogicalType::BOOLEAN;
+		AddNamedParameter(function, "strict", LogicalType::BOOLEAN);
+		AddNamedParameter(function, "u_turn_on_edge", LogicalType::BOOLEAN);
 		set.AddFunction(function);
 	}
 	return set;
@@ -395,7 +395,7 @@ TableFunctionSet GetWithPointsKspFunction() {
 				}
 				TableFunction function(arguments, KspScan, KspBind, KspInit);
 				AddCommonOptions(function);
-				function.named_parameters["heap_paths"] = LogicalType::BOOLEAN;
+				AddNamedParameter(function, "heap_paths", LogicalType::BOOLEAN);
 				set.AddFunction(function);
 			}
 		}

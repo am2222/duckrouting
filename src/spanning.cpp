@@ -348,7 +348,7 @@ TableFunctionSet TraversalSet(const char *name) {
 				arguments.push_back(LogicalType::BIGINT);
 			}
 			TableFunction function(arguments, TraversalScan, TraversalBind<UsePrim, Mode>, TraversalInit);
-			function.named_parameters["max_depth"] = LogicalType::BIGINT;
+			AddNamedParameter(function, "max_depth", LogicalType::BIGINT);
 			set.AddFunction(function);
 		}
 	}

@@ -448,8 +448,8 @@ TableFunctionSet SearchSet(const char *name) {
 				arguments.push_back(LogicalType::BIGINT);
 			}
 			TableFunction function(arguments, SearchScan, SearchBind<Mode>, SearchInit);
-			function.named_parameters["max_depth"] = LogicalType::BIGINT;
-			function.named_parameters["directed"] = LogicalType::BOOLEAN;
+			AddNamedParameter(function, "max_depth", LogicalType::BIGINT);
+			AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
 			set.AddFunction(function);
 		}
 	}
@@ -471,7 +471,7 @@ TableFunctionSet PathSet(const char *name, bool accepts_directed) {
 				}
 				TableFunction function(arguments, PathScan, PathBind<IsDag>, PathInit<IsDag>);
 				if (accepts_directed) {
-					function.named_parameters["directed"] = LogicalType::BOOLEAN;
+					AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
 				}
 				set.AddFunction(function);
 			}

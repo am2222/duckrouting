@@ -696,11 +696,11 @@ duckdb::CreateTableFunctionInfo Documented(duckdb::TableFunctionSet set) {
 		description.parameter_types = arguments;
 		NamePositionalArguments(doc, arguments, description);
 		// duckdb_functions() lists named parameters after the positional ones,
-		// in the order the function's own map yields them, and falls back to
+		// in the order the function itself yields them, and falls back to
 		// `colN` for any name the description does not reach. Reading them back
 		// off the function is the only way to keep the two in step.
-		for (auto &named : function.named_parameters) {
-			description.parameter_names.push_back(NameText(named.first));
+		for (auto &named : NamedParameterNames(function)) {
+			description.parameter_names.push_back(named);
 		}
 		info.descriptions.push_back(description);
 	}

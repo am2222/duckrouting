@@ -559,11 +559,11 @@ TableFunctionSet PathSet(const char *name, bool with_astar_options) {
 				}
 				TableFunction function(arguments, CostsOnly ? CostRowScan : PathScan, PathBind<Algorithm, CostsOnly>,
 				                       CostsOnly ? CostInit<Algorithm> : PathInit<Algorithm>);
-				function.named_parameters["directed"] = LogicalType::BOOLEAN;
+				AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
 				if (with_astar_options) {
-					function.named_parameters["heuristic"] = LogicalType::BIGINT;
-					function.named_parameters["factor"] = LogicalType::DOUBLE;
-					function.named_parameters["epsilon"] = LogicalType::DOUBLE;
+					AddNamedParameter(function, "heuristic", LogicalType::BIGINT);
+					AddNamedParameter(function, "factor", LogicalType::DOUBLE);
+					AddNamedParameter(function, "epsilon", LogicalType::DOUBLE);
 				}
 				set.AddFunction(function);
 			}
@@ -581,7 +581,7 @@ TableFunctionSet MatrixSet(const char *name) {
 			arguments.push_back(LogicalType::BOOLEAN);
 		}
 		TableFunction function(arguments, CostRowScan, MatrixBind<Algorithm>, CostInit<Algorithm>);
-		function.named_parameters["directed"] = LogicalType::BOOLEAN;
+		AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
 		set.AddFunction(function);
 	}
 	return set;

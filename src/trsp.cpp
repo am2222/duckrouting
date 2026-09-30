@@ -516,14 +516,14 @@ void TrspViaScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 }
 
 void AddTrspOptions(TableFunction &function, bool with_points, bool via) {
-	function.named_parameters["directed"] = LogicalType::BOOLEAN;
+	AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
 	if (via) {
-		function.named_parameters["strict"] = LogicalType::BOOLEAN;
-		function.named_parameters["u_turn_on_edge"] = LogicalType::BOOLEAN;
+		AddNamedParameter(function, "strict", LogicalType::BOOLEAN);
+		AddNamedParameter(function, "u_turn_on_edge", LogicalType::BOOLEAN);
 	}
 	if (with_points) {
-		function.named_parameters["driving_side"] = LogicalType::VARCHAR;
-		function.named_parameters["details"] = LogicalType::BOOLEAN;
+		AddNamedParameter(function, "driving_side", LogicalType::VARCHAR);
+		AddNamedParameter(function, "details", LogicalType::BOOLEAN);
 	}
 }
 

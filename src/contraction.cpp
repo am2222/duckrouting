@@ -496,8 +496,8 @@ TableFunctionSet GetContractionHierarchiesFunction() {
 			arguments.push_back(LogicalType::BOOLEAN);
 		}
 		TableFunction function(arguments, ContractionScan, ContractionBind, ContractionInit);
-		function.named_parameters["directed"] = LogicalType::BOOLEAN;
-		function.named_parameters["forbidden"] = LogicalType::LIST(LogicalType::BIGINT);
+		AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
+		AddNamedParameter(function, "forbidden", LogicalType::LIST(LogicalType::BIGINT));
 		set.AddFunction(function);
 	}
 	return set;
@@ -514,9 +514,9 @@ TableFunctionSet GetWithPointsDDFunction() {
 				arguments.push_back(LogicalType::VARCHAR);
 			}
 			TableFunction function(arguments, WithPointsScan, WithPointsBind, WithPointsInit);
-			function.named_parameters["directed"] = LogicalType::BOOLEAN;
-			function.named_parameters["details"] = LogicalType::BOOLEAN;
-			function.named_parameters["driving_side"] = LogicalType::VARCHAR;
+			AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
+			AddNamedParameter(function, "details", LogicalType::BOOLEAN);
+			AddNamedParameter(function, "driving_side", LogicalType::VARCHAR);
 			set.AddFunction(function);
 		}
 	}

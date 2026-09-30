@@ -666,7 +666,7 @@ TableFunctionSet FlowSet(const char *name, duckdb::table_function_t scan, duckdb
 				}
 				TableFunction function(arguments, scan, bind, init);
 				if (accepts_directed) {
-					function.named_parameters["directed"] = LogicalType::BOOLEAN;
+					AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
 				}
 				set.AddFunction(function);
 			}

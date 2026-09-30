@@ -273,8 +273,8 @@ TableFunctionSet TspSet(const char *name) {
 			arguments.push_back(LogicalType::BIGINT);
 		}
 		TableFunction function(arguments, TspScan, TspBind, TspInit<Euclidean>);
-		function.named_parameters["start_id"] = LogicalType::BIGINT;
-		function.named_parameters["end_id"] = LogicalType::BIGINT;
+		AddNamedParameter(function, "start_id", LogicalType::BIGINT);
+		AddNamedParameter(function, "end_id", LogicalType::BIGINT);
 		set.AddFunction(function);
 	}
 	return set;

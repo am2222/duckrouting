@@ -495,24 +495,32 @@ std::vector<Restriction> LoadRestrictions(ClientContext &context, const string &
 		throw InvalidInputException("duckrouting: the restrictions query failed: %s", result->GetError());
 	}
 
+	// Read chunk by chunk, like the other loaders: v2's Connection::Query no
+	// longer promises a materialised result with random access.
 	std::vector<Restriction> restrictions;
-	for (duckdb::idx_t row = 0; row < result->RowCount(); row++) {
-		auto path_value = result->GetValue(0, row);
-		auto cost_value = result->GetValue(1, row);
-		if (path_value.IsNull() || cost_value.IsNull()) {
-			continue;
+	while (true) {
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
 		}
-		Restriction restriction {};
-		for (auto &child : duckdb::ListValue::GetChildren(path_value)) {
-			if (!child.IsNull()) {
-				restriction.path.push_back(child.GetValue<int64_t>());
+		for (duckdb::idx_t row = 0; row < chunk->size(); row++) {
+			auto path_value = chunk->GetValue(0, row);
+			auto cost_value = chunk->GetValue(1, row);
+			if (path_value.IsNull() || cost_value.IsNull()) {
+				continue;
 			}
+			Restriction restriction {};
+			for (auto &child : duckdb::ListValue::GetChildren(path_value)) {
+				if (!child.IsNull()) {
+					restriction.path.push_back(child.GetValue<int64_t>());
+				}
+			}
+			if (restriction.path.empty()) {
+				continue;
+			}
+			restriction.cost = cost_value.GetValue<double>();
+			restrictions.push_back(restriction);
 		}
-		if (restriction.path.empty()) {
-			continue;
-		}
-		restriction.cost = cost_value.GetValue<double>();
-		restrictions.push_back(restriction);
 	}
 	return restrictions;
 }

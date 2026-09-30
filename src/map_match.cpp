@@ -548,12 +548,12 @@ TableFunctionSet MakeSet(const char *name, Bind bind, Init init, Scan scan, bool
 			arguments.push_back(LogicalType::DOUBLE);
 		}
 		TableFunction function(arguments, scan, bind, init);
-		function.named_parameters["gps_error"] = LogicalType::DOUBLE;
-		function.named_parameters["delta"] = LogicalType::DOUBLE;
-		function.named_parameters["reverse_tolerance"] = LogicalType::DOUBLE;
-		function.named_parameters["directed"] = LogicalType::BOOLEAN;
+		AddNamedParameter(function, "gps_error", LogicalType::DOUBLE);
+		AddNamedParameter(function, "delta", LogicalType::DOUBLE);
+		AddNamedParameter(function, "reverse_tolerance", LogicalType::DOUBLE);
+		AddNamedParameter(function, "directed", LogicalType::BOOLEAN);
 		if (with_details) {
-			function.named_parameters["details"] = LogicalType::BOOLEAN;
+			AddNamedParameter(function, "details", LogicalType::BOOLEAN);
 		}
 		set.AddFunction(function);
 	}

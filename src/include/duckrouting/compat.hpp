@@ -5,6 +5,7 @@
 
 #include <string>
 #include <type_traits>
+#include <vector>
 
 namespace duckrouting {
 
@@ -76,28 +77,127 @@ inline auto InfoName(const Info &info) -> decltype((info.GetFunctionName())) {
 	return info.GetFunctionName();
 }
 
+//! Overload ranking for the helpers below: a call made with Rank<2> prefers
+//! the Rank<2> candidate, falls back to Rank<1>, and to Rank<0> last. Each
+//! candidate is only viable where the DuckDB API it reaches for exists.
+namespace detail {
+
+template <int N>
+struct Rank : Rank<N - 1> {};
+template <>
+struct Rank<0> {};
+
+} // namespace detail
+
 //! The positional argument types of one function overload. v1.5 exposes them as
-//! a plain member; v2 adds an accessor and keeps the member. The two candidates
-//! are ranked rather than overloaded, because where both spellings exist an
-//! unranked pair is ambiguous rather than merely redundant -- `0` is an `int`,
-//! so the accessor wins, and the member is only reached when it does not exist.
+//! a plain member; an earlier v2 added an accessor and kept the member; the
+//! current v2 keeps them inside a FunctionSignature, as the parameters a caller
+//! can pass by position. The three are ranked rather than overloaded, because
+//! where two spellings exist an unranked pair is ambiguous rather than merely
+//! redundant.
 namespace detail {
 
 template <typename Function>
-inline auto ArgumentTypes(const Function &function, int) -> decltype((function.GetArguments())) {
+inline auto ArgumentTypes(const Function &function, Rank<2>) -> decltype((function.GetArguments())) {
 	return function.GetArguments();
 }
 
 template <typename Function>
-inline auto ArgumentTypes(const Function &function, long) -> decltype((function.arguments)) {
+inline auto ArgumentTypes(const Function &function, Rank<1>) -> decltype((function.arguments)) {
 	return function.arguments;
+}
+
+template <typename Function>
+inline auto ArgumentTypes(const Function &function, Rank<0>)
+    -> decltype(function.GetSignature().GetParameterCount(), duckdb::vector<duckdb::LogicalType>()) {
+	duckdb::vector<duckdb::LogicalType> types;
+	const auto &signature = function.GetSignature();
+	for (duckdb::idx_t i = 0; i < signature.GetParameterCount(); i++) {
+		const auto &parameter = signature.GetParameter(i);
+		if (parameter.AcceptsPosition()) {
+			types.push_back(parameter.GetType());
+		}
+	}
+	return types;
 }
 
 } // namespace detail
 
 template <typename Function>
-inline auto ArgumentTypes(const Function &function) -> decltype(detail::ArgumentTypes(function, 0)) {
-	return detail::ArgumentTypes(function, 0);
+inline auto ArgumentTypes(const Function &function) -> decltype(detail::ArgumentTypes(function, detail::Rank<2>())) {
+	return detail::ArgumentTypes(function, detail::Rank<2>());
+}
+
+//! Declares a named parameter on a table function. v1.5 keeps a map of them on
+//! the function; the current v2 has no such map, and instead takes them as the
+//! typed options of a "**options" parameter on the function's signature, one
+//! call to declare the first and another to extend the set.
+namespace detail {
+
+template <typename Function>
+inline auto AddNamedParameter(Function &function, const char *name, const duckdb::LogicalType &type, Rank<1>)
+    -> decltype(function.named_parameters[name] = type, void()) {
+	function.named_parameters[name] = type;
+}
+
+template <typename Function>
+inline auto AddNamedParameter(Function &function, const char *name, const duckdb::LogicalType &type, Rank<0>)
+    -> decltype(function.GetSignature().GetTypedKwargs(), void()) {
+	// The options type is only spelled through the signature, so this
+	// candidate stays a template that v1.5 never has to instantiate.
+	typedef typename std::remove_const<
+	    typename std::remove_reference<decltype(*function.GetSignature().GetTypedKwargs())>::type>::type Options;
+	auto &signature = function.GetSignature();
+	// A literal converts to v2's Identifier implicitly; a std::string does not.
+	auto add = [&](Options &options) {
+		options.Add(name, type);
+	};
+	if (signature.GetTypedKwargs()) {
+		signature.ExtendTypedKwargs(add);
+	} else {
+		signature.WithTypedKwargs("options", add);
+	}
+}
+
+} // namespace detail
+
+template <typename Function>
+inline void AddNamedParameter(Function &function, const char *name, const duckdb::LogicalType &type) {
+	detail::AddNamedParameter(function, name, type, detail::Rank<1>());
+}
+
+//! The names of a table function's named parameters, in the order DuckDB
+//! reports them, read back off wherever the version at hand keeps them.
+namespace detail {
+
+template <typename Function>
+inline auto NamedParameterNames(const Function &function, Rank<1>)
+    -> decltype(function.named_parameters.begin(), std::vector<std::string>()) {
+	std::vector<std::string> names;
+	for (auto &entry : function.named_parameters) {
+		names.push_back(NameText(entry.first));
+	}
+	return names;
+}
+
+template <typename Function>
+inline auto NamedParameterNames(const Function &function, Rank<0>)
+    -> decltype(function.GetSignature().GetTypedKwargs(), std::vector<std::string>()) {
+	std::vector<std::string> names;
+	auto options = function.GetSignature().GetTypedKwargs();
+	if (options) {
+		for (auto &name : options->GetNames()) {
+			names.push_back(NameText(name));
+		}
+	}
+	return names;
+}
+
+} // namespace detail
+
+template <typename Function>
+inline std::vector<std::string> NamedParameterNames(const Function &function) {
+	return detail::NamedParameterNames(function, detail::Rank<1>());
 }
 
 //! One overload out of a function set. v1.5 stores them by value; v2 shares
