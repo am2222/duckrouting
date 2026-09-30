@@ -65,18 +65,6 @@ inline auto NameText(const Name &name) -> decltype((name.GetIdentifierName())) {
 	return name.GetIdentifierName();
 }
 
-//! The name a CreateInfo carries. v1.5 has it as a `string` member; v2 moved it
-//! into a qualified name reachable through `GetFunctionName()`.
-template <typename Info>
-inline auto InfoName(const Info &info) -> decltype((info.name)) {
-	return info.name;
-}
-
-template <typename Info>
-inline auto InfoName(const Info &info) -> decltype((info.GetFunctionName())) {
-	return info.GetFunctionName();
-}
-
 //! Overload ranking for the helpers below: a call made with Rank<2> prefers
 //! the Rank<2> candidate, falls back to Rank<1>, and to Rank<0> last. Each
 //! candidate is only viable where the DuckDB API it reaches for exists.
@@ -88,6 +76,29 @@ template <>
 struct Rank<0> {};
 
 } // namespace detail
+
+//! The name a CreateInfo carries. v1.5 has it as a `string` member; v2 moved it
+//! into a qualified name reachable through `GetFunctionName()`; v1.5.6 grew the
+//! accessor while keeping the member, so the two are ranked rather than
+//! overloaded -- as an unranked pair they are ambiguous wherever both exist.
+namespace detail {
+
+template <typename Info>
+inline auto InfoName(const Info &info, Rank<1>) -> decltype((info.GetFunctionName())) {
+	return info.GetFunctionName();
+}
+
+template <typename Info>
+inline auto InfoName(const Info &info, Rank<0>) -> decltype((info.name)) {
+	return info.name;
+}
+
+} // namespace detail
+
+template <typename Info>
+inline auto InfoName(const Info &info) -> decltype(detail::InfoName(info, detail::Rank<1>())) {
+	return detail::InfoName(info, detail::Rank<1>());
+}
 
 //! The positional argument types of one function overload. v1.5 exposes them as
 //! a plain member; an earlier v2 added an accessor and kept the member; the

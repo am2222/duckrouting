@@ -2,12 +2,15 @@
 // what to draw; RoutingDemo.vue owns the map, the clicks and the chrome, and
 // knows nothing about any particular function.
 //
-// A mode returns up to three sets of features -- `lower`, `upper` and
+// A mode returns up to four sets of features -- `area`, `lower`, `upper` and
 // `points` -- plus the paint to draw them with. Two line layers rather than
 // one because the orderings genuinely differ: KSP wants its alternatives
 // *under* the best route, maximum flow wants its saturated edges *over* the
 // corridor. Both are "secondary under/over primary", so the layers are named
-// for their stacking rather than their meaning.
+// for their stacking rather than their meaning. `area` is a fill drawn under
+// everything else, including the network itself.
+
+import { Delaunay } from 'd3-delaunay'
 
 const EDGES = `'SELECT id, source, target, cost, reverse_cost FROM edges'`
 const CAPACITY = `'SELECT id, source, target, capacity, reverse_capacity FROM edges'`
@@ -127,6 +130,160 @@ function pointAt(coords, fraction) {
   return unproject(coords[coords.length - 1])
 }
 
+// --- geometry for the service area -----------------------------------------
+//
+// Driving distance comes back as junctions and the cost of reaching each. An
+// isochrone is the area those junctions span, and the classic way to draw one
+// is pgRouting's pgr_alphaShape: triangulate the points, drop every triangle
+// too large for a disc of radius alpha to fit inside, and chain the boundary
+// of what is left into rings. It hugs the streets where a convex hull would
+// bridge the canals between them.
+//
+// Points are laid along each street every STEP metres rather than only at
+// its ends, so a long straight street does not break the shape into triangles
+// wider than the disc; and each street leaving the reached set contributes
+// the stretch the remaining budget still covers, so a small radius from a
+// junction whose streets are all longer than it still shows an area.
+
+const ALPHA = 150 // metres: the disc that has to fit inside the shape
+const STEP = 25 // metres between points laid along a street
+
+/** The stretch of a projected polyline from its start to `fraction` of its
+ *  length. Pass the coordinates reversed to measure from the other end. */
+function stretch(coords, fraction) {
+  let total = 0
+  for (let i = 0; i + 1 < coords.length; i++) {
+    total += Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1])
+  }
+  let remaining = fraction * total
+  const out = [coords[0]]
+  for (let i = 0; i + 1 < coords.length; i++) {
+    const l = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1])
+    if (remaining <= l) {
+      const t = l ? remaining / l : 0
+      out.push([
+        coords[i][0] + t * (coords[i + 1][0] - coords[i][0]),
+        coords[i][1] + t * (coords[i + 1][1] - coords[i][1])
+      ])
+      return out
+    }
+    remaining -= l
+    out.push(coords[i + 1])
+  }
+  return out
+}
+
+/** Appends a point every STEP metres along a projected polyline to `out`. */
+function densify(coords, out) {
+  for (let i = 0; i + 1 < coords.length; i++) {
+    const [ax, ay] = coords[i]
+    const [bx, by] = coords[i + 1]
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / STEP))
+    for (let k = 0; k < n; k++) out.push([ax + (bx - ax) * k / n, ay + (by - ay) * k / n])
+  }
+  out.push(coords[coords.length - 1])
+}
+
+/** Twice the signed area of a triangle, or of a ring of projected points. */
+function doubleArea(ring) {
+  let sum = 0
+  for (let i = 0; i < ring.length; i++) {
+    const [ax, ay] = ring[i]
+    const [bx, by] = ring[(i + 1) % ring.length]
+    sum += ax * by - bx * ay
+  }
+  return sum
+}
+
+function circumradius(a, b, c) {
+  const area = Math.abs(doubleArea([a, b, c]))
+  if (!area) return Infinity
+  return Math.hypot(a[0] - b[0], a[1] - b[1]) * Math.hypot(b[0] - c[0], b[1] - c[1]) *
+    Math.hypot(c[0] - a[0], c[1] - a[1]) / (2 * area)
+}
+
+function contains(ring, [x, y]) {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [ax, ay] = ring[i]
+    const [bx, by] = ring[j]
+    if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax) inside = !inside
+  }
+  return inside
+}
+
+/** The alpha shape of a set of projected points, as a GeoJSON MultiPolygon in
+ *  lon/lat, with its area in square metres. Null when there is nothing to
+ *  draw -- fewer than three points, or none close enough together. */
+function alphaShape(points) {
+  if (points.length < 3) return null
+  const n = points.length
+  const { triangles } = Delaunay.from(points)
+  // Every directed edge of every triangle kept. A shared edge shows up once in
+  // each direction, a boundary edge only once, so the boundary is the set of
+  // directed edges whose reverse is missing.
+  const directed = new Set()
+  let area = 0
+  let orientation = 0
+  for (let t = 0; t < triangles.length; t += 3) {
+    const a = triangles[t]
+    const b = triangles[t + 1]
+    const c = triangles[t + 2]
+    if (circumradius(points[a], points[b], points[c]) > ALPHA) continue
+    const twice = doubleArea([points[a], points[b], points[c]])
+    area += Math.abs(twice) / 2
+    orientation += twice
+    directed.add(a * n + b)
+    directed.add(b * n + c)
+    directed.add(c * n + a)
+  }
+  if (!directed.size) return null
+  const next = new Map()
+  for (const key of directed) {
+    const a = Math.floor(key / n)
+    const b = key % n
+    if (directed.has(b * n + a)) continue
+    if (!next.has(a)) next.set(a, [])
+    next.get(a).push(b)
+  }
+  // Walk the boundary edges into closed rings. A vertex where two lobes of
+  // the shape touch has more than one way out; any of them closes eventually.
+  const rings = []
+  for (const [start, exits] of next) {
+    while (exits.length) {
+      const ring = [start]
+      let at = start
+      do {
+        const list = next.get(at)
+        if (!list || !list.length) break
+        at = list.pop()
+        ring.push(at)
+      } while (at !== start)
+      if (at === start && ring.length > 3) rings.push(ring.map(i => points[i]))
+    }
+  }
+  // Rings wound the same way as the triangles are outer boundaries; the
+  // others are holes, each belonging to the smallest outer ring around it.
+  const outer = []
+  const holes = []
+  for (const ring of rings) {
+    (Math.sign(doubleArea(ring)) === Math.sign(orientation) ? outer : holes).push(ring)
+  }
+  outer.sort((a, b) => Math.abs(doubleArea(a)) - Math.abs(doubleArea(b)))
+  const polygons = outer.map(ring => [ring])
+  for (const hole of holes) {
+    const home = outer.findIndex(ring => contains(ring, hole[0]))
+    if (home >= 0) polygons[home].push(hole)
+  }
+  return {
+    area,
+    geometry: {
+      type: 'MultiPolygon',
+      coordinates: polygons.map(rings => rings.map(ring => ring.map(unproject)))
+    }
+  }
+}
+
 /** The `k` nearest edges within `radius` metres of each fix, in the shape
  *  duckrouting_map_match wants. */
 function candidates(fixes, ctx, radius, k) {
@@ -176,16 +333,51 @@ export const MODES = {
     needs: 1,
     hint: 'Click one point.',
     slider: { key: 'radius', min: 200, max: 2000, step: 100, unit: 'm', label: 'radius' },
+    legend: [[SKY, 'service area — the isochrone', 'area'], [SKY, 'streets reached']],
     async run(ctx) {
-      const sql = `SELECT edge, agg_cost FROM duckrouting_driving_distance(${EDGES}, ${ctx.stops[0]}, ${ctx.radius}.0)`
+      const sql = `SELECT node, agg_cost FROM duckrouting_driving_distance(${EDGES}, ${ctx.stops[0]}, ${ctx.radius}.0)`
       const rows = await ctx.query(sql)
-      const used = rows.map(r => Number(r.edge)).filter(e => e > 0)
+      const reached = new Map(rows.map(r => [Number(r.node), Number(r.agg_cost)]))
       const far = rows.reduce((m, r) => Math.max(m, Number(r.agg_cost)), 0)
+      // The function reports junctions; the streets between them are
+      // recovered here so that the picture can also show the stretch of each
+      // street leaving the reached set that the leftover budget still covers.
+      // A street is covered from either end it is enterable from: fully when
+      // the budget left at that end exceeds its cost, otherwise up to where
+      // the budget runs out.
+      const streets = []
+      const points = []
+      const stub = part => {
+        densify(part, points)
+        streets.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: part.map(unproject) }, properties: {} })
+      }
+      for (const feature of ctx.featureById.values()) {
+        const p = feature.properties
+        const coords = polyline(feature)
+        // The fraction of the street the budget left at one end covers, when
+        // that end can enter it at all.
+        const fraction = (end, cost) => {
+          const budget = ctx.radius - (reached.get(end) ?? Infinity)
+          return cost >= 0 && budget > 0 ? budget / cost : 0
+        }
+        const fromSource = fraction(p.source, p.cost)
+        const fromTarget = fraction(p.target, p.reverse_cost)
+        if (fromSource + fromTarget >= 1) {
+          densify(coords, points)
+          streets.push(feature)
+        } else {
+          if (fromSource > 0) stub(stretch(coords, fromSource))
+          if (fromTarget > 0) stub(stretch([...coords].reverse(), fromTarget))
+        }
+      }
+      const shape = alphaShape(points)
       return {
         sql,
-        upper: edges(used, ctx),
-        paint: { upper: line(SKY, 3, 0.8) },
-        summary: `${rows.length} nodes within ${ctx.radius} m · furthest ${Math.round(far)} m`
+        area: shape ? [{ type: 'Feature', geometry: shape.geometry, properties: {} }] : [],
+        upper: streets,
+        paint: { area: { color: SKY, opacity: 0.22 }, upper: line(SKY, 2.5, 0.9) },
+        summary: `${reached.size} junctions within ${ctx.radius} m · furthest ${Math.round(far)} m` +
+          (shape ? ` · ${(shape.area / 1e6).toFixed(2)} km²` : '')
       }
     }
   },

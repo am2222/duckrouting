@@ -57,7 +57,12 @@ two vertices you click, and draws every edge it returns.
 **Driving distance** runs
 [`duckrouting_driving_distance`](/functions/dijkstra#duckrouting-driving-distance)
 from one vertex out to a cost radius — the service area around a point. Drag
-the slider and watch it grow along the streets rather than as a circle.
+the slider and watch it grow along the streets rather than as a circle. The
+function returns the junctions reached and the cost of reaching each; the
+polygon around them is an alpha shape, the same construction as pgRouting's
+`pgr_alphaShape`, computed in the browser from the streets those junctions
+span — including the last stretch of each street that the remaining budget
+still covers.
 
 **K alternatives** runs [`duckrouting_ksp`](/functions/ksp), Yen's algorithm,
 and draws the cheapest route over the alternatives so you can see how much
