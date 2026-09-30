@@ -77,6 +77,7 @@ functions want `capacity` and `reverse_capacity` instead of costs, and the
 | [Contraction & points](https://am2222.github.io/duckrouting/functions/contraction) | `contraction_hierarchies`, `dead_end_contraction`, `linear_contraction`, the `with_points` family |
 | Turn restrictions | `trsp`, `trsp_via`, `trsp_with_points`, `trsp_via_with_points` |
 | [Travelling salesman](https://am2222.github.io/duckrouting/functions/tsp) | `tsp`, `tsp_euclidean` |
+| [Map matching](https://am2222.github.io/duckrouting/functions/map-matching) | `map_match`, `map_match_path` (Fast Map Matching, not a pgRouting function) |
 | Other | `chinese_postman`, `line_graph`, `extract_vertices`, `degree` |
 
 Three geometry helpers — `find_close_edges`, `separate_crossing`,

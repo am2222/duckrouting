@@ -81,6 +81,8 @@ duckrouting_line_graph	2
 duckrouting_line_graph_full	1
 duckrouting_linear_contraction	2
 duckrouting_make_connected	1
+duckrouting_map_match	2
+duckrouting_map_match_path	2
 duckrouting_max_cardinality_match	1
 duckrouting_max_flow	4
 duckrouting_max_flow_min_cost	4

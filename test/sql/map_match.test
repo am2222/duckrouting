@@ -1,0 +1,326 @@
+# name: test/sql/map_match.test
+# description: map matching -- snapping noisy GPS points onto the graph
+# group: [sql]
+
+#
+# The algorithm is Fast Map Matching (Yang & Gidofalvi, 2018): a hidden
+# Markov model whose emission probability is a Gaussian on the distance from
+# each GPS point to a candidate edge, and whose transition probability is the
+# ratio of straight-line distance to shortest-path distance between
+# consecutive candidates. Candidates are supplied as a query in the shape
+# duckrouting_find_close_edges produces, so no geometry is needed here.
+#
+# The network, the three trips and the expected results are FMM's own sample
+# data (example/data in https://github.com/cyang-kth/fmm, Apache-2.0). The
+# cost of each edge is its length, which is what FMM routes on, and the
+# candidate table is what FMM's search finds with k = 4 and radius = 0.4.
+
+require duckrouting
+
+statement ok
+CREATE TABLE edges(id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+ (1,1,2,1.0,-1),(2,2,1,1.0,-1),(3,3,1,1.0,-1),(4,4,3,1.0,-1),(5,1,5,1.0,-1),(6,5,1,1.0,-1),
+ (7,3,6,1.0,-1),(8,7,8,1.0,-1),(9,8,7,1.0,-1),(10,5,8,1.0,-1),(11,8,5,1.0,-1),(12,6,5,1.0,-1),
+ (13,5,6,1.0,-1),(14,6,9,1.0,-1),(15,9,6,1.0,-1),(16,10,5,1.0,-1),(17,5,10,1.0,-1),(18,6,11,1.0,-1),
+ (19,10,11,1.0,-1),(20,11,12,1.0,-1),(21,13,10,1.0,-1),(22,10,13,1.0,-1),(23,9,12,1.0,-1),(24,12,9,1.0,-1),
+ (25,9,4,1.0,-1),(26,4,9,1.0,-1),(27,14,15,1.5,-1),(28,15,14,1.5,-1),(29,16,17,1.7,-1),(30,17,16,1.7,-1);
+
+statement ok
+CREATE TABLE candidates(traj_id BIGINT, pid BIGINT, edge_id BIGINT, fraction DOUBLE, distance DOUBLE, x DOUBLE, y DOUBLE);
+
+statement ok
+INSERT INTO candidates VALUES
+ (1,1,1,0.74901129943503,0.34110169491526,1.65889830508474,0.25098870056497),
+ (1,1,2,0.25098870056497,0.34110169491526,1.65889830508474,0.25098870056497),
+ (1,2,1,0.298163841807909,0.34505649717514,1.65494350282486,0.701836158192091),
+ (1,2,2,0.701836158192091,0.34505649717514,1.65494350282486,0.701836158192091),
+ (1,3,12,0.5066384180791,0.23432203389831,2.4933615819209,1.76567796610169),
+ (1,3,13,0.4933615819209,0.23432203389831,2.4933615819209,1.76567796610169),
+ (1,4,14,0.54929378531073,0.11172316384181,3.54929378531073,1.88827683615819),
+ (1,4,15,0.45070621468927,0.11172316384181,3.54929378531073,1.88827683615819),
+ (1,5,23,0.45776836158192,0.13064971751412,4.13064971751412,2.45776836158192),
+ (1,5,24,0.54223163841808,0.13064971751412,4.13064971751412,2.45776836158192),
+ (2,1,25,0.39646892655367,0.15042372881356,4.15042372881356,1.60353107344633),
+ (2,1,26,0.60353107344633,0.15042372881356,4.15042372881356,1.60353107344633),
+ (2,2,4,0.52980225988701,0.076694915254239,3.47019774011299,0.923305084745761),
+ (2,3,3,0.59364406779661,0.076694915254239,2.40635593220339,0.923305084745761),
+ (2,4,5,0.53234463276836,0.14533898305084,2.14533898305084,1.53234463276836),
+ (2,4,6,0.46765536723164,0.14533898305084,2.14533898305084,1.53234463276836),
+ (2,5,16,0.42358757062147,0.08601694915254,2.08601694915254,2.57641242937853),
+ (2,5,17,0.57641242937853,0.08601694915254,2.08601694915254,2.57641242937853),
+ (2,6,19,0.49731638418079,0.0122881355932201,2.49731638418079,2.98771186440678),
+ (3,1,8,0.200812146892656,0.14088983050848,0.200812146892656,2.14088983050848),
+ (3,1,9,0.799187853107344,0.14088983050848,0.200812146892656,2.14088983050848),
+ (3,2,10,0.55737994350283,0.14879943502825,1.44262005649717,2.14879943502825),
+ (3,2,11,0.44262005649717,0.14879943502825,1.44262005649717,2.14879943502825),
+ (3,3,18,0.16066384180791,0.0640889830508402,3.06408898305084,2.16066384180791),
+ (3,3,14,0.0640889830508402,0.16066384180791,3.06408898305084,2.16066384180791),
+ (3,3,15,0.93591101694916,0.16066384180791,3.06408898305084,2.16066384180791),
+ (3,3,7,1,0.17297476062411,3.06408898305084,2.16066384180791),
+ (3,4,18,0.7103813559322,0.0640889830508402,3.06408898305084,2.7103813559322),
+ (3,4,20,0.0640889830508402,0.2896186440678,3.06408898305084,2.7103813559322),
+ (3,4,19,1,0.296624942882695,3.06408898305084,2.7103813559322),
+ (3,5,20,0.70872175141242,0.0206920903954799,3.70872175141242,2.97930790960452),
+ (3,5,29,0.600407111997341,0.20872175141242,3.70872175141242,2.97930790960452),
+ (3,5,30,0.399592888002659,0.20872175141242,3.70872175141242,2.97930790960452),
+ (3,5,23,0.97930790960452,0.29127824858758,3.70872175141242,2.97930790960452),
+ (3,6,23,0.62337570621469,0.11606638418078,4.11606638418078,2.62337570621469),
+ (3,6,24,0.37662429378531,0.11606638418078,4.11606638418078,2.62337570621469),
+ (3,6,20,1,0.39410311367215,4.11606638418078,2.62337570621469);
+
+# ---------------------------------------------------------------------------
+# duckrouting_map_match: one row per GPS point, the edge it was matched to
+# ---------------------------------------------------------------------------
+# FMM's mr.txt reports cpath 2,5,13,14,23 for trip 1, 25,4,3,5,17,19 for
+# trip 2 and 8,11,13,18,20,24 for trip 3. The matched edge per point is that
+# path with the connecting edges (5 in trip 1, 13 in trip 3) removed.
+
+query III
+SELECT traj_id, pid, edge FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', 0.5)
+ORDER BY traj_id, pid;
+----
+1	1	2
+1	2	2
+1	3	13
+1	4	14
+1	5	23
+2	1	25
+2	2	4
+2	3	3
+2	4	5
+2	5	17
+2	6	19
+3	1	8
+3	2	11
+3	3	18
+3	4	18
+3	5	20
+3	6	24
+
+# The matched fraction and distance are those of the chosen candidate.
+query RR
+SELECT round(fraction, 6), round(distance, 6) FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', 0.5)
+WHERE traj_id = 1 AND pid = 1;
+----
+0.250989	0.341102
+
+# Emission probability is exp(-0.5 * (distance / gps_error)^2); the first
+# point has no transition, so tp and sp_dist are 0 there. From point 2 to
+# point 3 the route runs 0.298 to the end of edge 2, all of edge 5 and 0.493
+# into edge 13, further than the straight line between the fixes, so tp < 1.
+
+query IRRR
+SELECT pid, round(ep, 6), round(tp, 6), round(sp_dist, 6) FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', 0.5)
+WHERE traj_id = 1 ORDER BY pid;
+----
+1	0.792391	0	0
+2	0.788102	1	0.450847
+3	0.896001	0.756067	1.791525
+4	0.975345	1	1.055932
+5	0.966437	0.895804	0.908475
+
+# gps_error is a named parameter too, and defaults to 50.
+query I
+SELECT count(*) FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', gps_error => 0.5);
+----
+17
+
+query I
+SELECT count(*) FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates');
+----
+17
+
+# Without a traj_id column every candidate belongs to trajectory 1.
+query II
+SELECT traj_id, edge FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, distance, x, y FROM candidates WHERE traj_id = 2', 0.5)
+ORDER BY pid;
+----
+1	25
+1	4
+1	3
+1	5
+1	17
+1	19
+
+# ---------------------------------------------------------------------------
+# duckrouting_map_match_path: the complete route through the network
+# ---------------------------------------------------------------------------
+# The edge sequence is FMM's cpath exactly. Two consecutive points on the same
+# edge (trip 1 points 1 and 2, trip 3 points 3 and 4) produce one row, since
+# the intermediate point vertex is hidden and its segment merged.
+
+query II
+SELECT path_id, list(edge ORDER BY path_seq) FILTER (WHERE edge <> -1) FROM duckrouting_map_match_path(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', 0.5)
+GROUP BY path_id ORDER BY path_id;
+----
+1	[2, 5, 13, 14, 23]
+2	[25, 4, 3, 5, 17, 19]
+3	[8, 11, 13, 18, 20, 24]
+
+# Trip 1 in full. It starts at point -1 and ends at point -5; the first row's
+# cost covers the rest of edge 2 beyond point 2, whose vertex is hidden. The
+# total is the length of FMM's matched geometry
+# LINESTRING(2 0.250988700565,2 1,2 2,3 2,4 2,4 2.45776836158).
+
+query IIIIIRR
+SELECT path_seq, start_vid, end_vid, node, edge, round(cost, 6), round(agg_cost, 6) FROM duckrouting_map_match_path(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', 0.5)
+WHERE path_id = 1 ORDER BY path_seq;
+----
+1	-1	-5	-1	2	0.749011	0
+2	-1	-5	1	5	1	0.749011
+3	-1	-5	5	13	1	1.749011
+4	-1	-5	6	14	1	2.749011
+5	-1	-5	9	23	0.457768	3.749011
+6	-1	-5	-5	-1	0	4.20678
+
+# With details every matched point appears as its own vertex, splitting the
+# edge it sits on at its fraction.
+query IIR
+SELECT node, edge, round(cost, 6) FROM duckrouting_map_match_path(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', 0.5, details => true)
+WHERE path_id = 1 ORDER BY path_seq;
+----
+-1	2	0.450847
+-2	2	0.298164
+1	5	1
+5	13	0.493362
+-3	13	0.506638
+6	14	0.549294
+-4	14	0.450706
+9	23	0.457768
+-5	-1	0
+
+# ---------------------------------------------------------------------------
+# Unmatched trajectories
+# ---------------------------------------------------------------------------
+# Edge 27 is on a disconnected piece of the network, so no transition from it
+# exists and the trajectory is reported unmatched, as FMM does: no rows.
+
+statement ok
+CREATE TABLE stranded(pid BIGINT, edge_id BIGINT, fraction DOUBLE, distance DOUBLE, x DOUBLE, y DOUBLE);
+
+statement ok
+INSERT INTO stranded VALUES (1, 27, 0.5, 0.1, 1.25, 3.4), (2, 5, 0.5, 0.1, 2.1, 1.5);
+
+query I
+SELECT count(*) FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, distance, x, y FROM stranded', 0.5);
+----
+0
+
+query I
+SELECT count(*) FROM duckrouting_map_match_path(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, distance, x, y FROM stranded', 0.5);
+----
+0
+
+# delta bounds the shortest-path search between consecutive points, which is
+# FMM's upper bound. Trip 1 needs a transition of 1.79 and trip 3 one of
+# 1.72, so a bound of 1.5 breaks both, while trip 2's longest is 1.13.
+
+query I
+SELECT list(DISTINCT traj_id ORDER BY traj_id) FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', 0.5, delta => 1.5);
+----
+[2]
+
+query I
+SELECT list(DISTINCT traj_id ORDER BY traj_id) FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT traj_id, pid, edge_id, fraction, distance, x, y FROM candidates', 0.5, delta => 1.8);
+----
+[1, 2, 3]
+
+# A single point is trivially matched to its closest candidate.
+query II
+SELECT pid, edge FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, distance, x, y FROM candidates WHERE traj_id = 3 AND pid = 3', 0.5);
+----
+3	18
+
+# ---------------------------------------------------------------------------
+# reverse_tolerance
+# ---------------------------------------------------------------------------
+# Two fixes on the same one-way edge, the second slightly behind the first.
+# By default the only way to get there is round the block; with a tolerance
+# of 0.1 (a tenth of the edge) the step back is treated as GPS noise instead.
+
+statement ok
+CREATE TABLE backwards(pid BIGINT, edge_id BIGINT, fraction DOUBLE, distance DOUBLE, x DOUBLE, y DOUBLE);
+
+statement ok
+INSERT INTO backwards VALUES (1, 5, 0.6, 0.05, 2.05, 1.6), (2, 5, 0.55, 0.05, 2.05, 1.55);
+
+query IR
+SELECT pid, round(sp_dist, 6) FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, distance, x, y FROM backwards', 0.5)
+ORDER BY pid;
+----
+1	0
+2	1.95
+
+query IR
+SELECT pid, round(sp_dist, 6) FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, distance, x, y FROM backwards', 0.5, reverse_tolerance => 0.1)
+ORDER BY pid;
+----
+1	0
+2	0
+
+query I
+SELECT list(edge ORDER BY path_seq) FILTER (WHERE edge <> -1) FROM duckrouting_map_match_path(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, distance, x, y FROM backwards', 0.5, reverse_tolerance => 0.1);
+----
+[5]
+
+# ---------------------------------------------------------------------------
+# Errors
+# ---------------------------------------------------------------------------
+
+statement error
+SELECT * FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, x, y FROM candidates', 0.5);
+----
+distance
+
+statement error
+SELECT * FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, distance, x, y FROM candidates', 0);
+----
+gps_error
+
+statement error
+SELECT * FROM duckrouting_map_match(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT pid, edge_id, fraction, distance, x, y FROM candidates', 0.5, reverse_tolerance => -1);
+----
+reverse_tolerance
