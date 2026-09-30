@@ -83,11 +83,20 @@ function draw(layer, list) {
 
 function paint(layer, spec, fallback) {
   const it = spec ?? fallback
-  const prefix = layer === 'points' ? 'circle' : 'line'
-  map.value.setPaintProperty(layer, `${prefix}-color`, it.color)
-  map.value.setPaintProperty(layer, layer === 'points' ? 'circle-radius' : 'line-width',
-    layer === 'points' ? it.radius : it.width)
-  map.value.setPaintProperty(layer, `${prefix}-opacity`, it.opacity ?? 1)
+  const set = (property, value) => map.value.setPaintProperty(layer, property, value)
+  if (layer === 'area') {
+    set('fill-color', it.color)
+    set('fill-outline-color', it.color)
+    set('fill-opacity', it.opacity ?? 1)
+  } else if (layer === 'points') {
+    set('circle-color', it.color)
+    set('circle-radius', it.radius)
+    set('circle-opacity', it.opacity ?? 1)
+  } else {
+    set('line-color', it.color)
+    set('line-width', it.width)
+    set('line-opacity', it.opacity ?? 1)
+  }
 }
 
 async function run() {
@@ -107,9 +116,11 @@ async function run() {
     })
     const ms = Math.round(performance.now() - t0)
     sql.value = out.sql
+    draw('area', out.area)
     draw('lower', out.lower)
     draw('upper', out.upper)
     draw('points', out.points)
+    paint('area', out.paint?.area, { color: '#000', opacity: 0 })
     paint('lower', out.paint?.lower, { color: '#000', width: 0, opacity: 0 })
     paint('upper', out.paint?.upper, { color: '#000', width: 0, opacity: 0 })
     paint('points', out.paint?.points, { color: '#000', radius: 0, opacity: 0 })
@@ -166,7 +177,7 @@ function reset() {
   picked.value = []
   result.value = ''
   sql.value = ''
-  for (const id of ['lower', 'upper', 'points', 'picked']) {
+  for (const id of ['area', 'lower', 'upper', 'points', 'picked']) {
     map.value?.getSource(id)?.setData(EMPTY)
   }
 }
@@ -239,9 +250,14 @@ onMounted(async () => {
 
   map.value.on('load', () => {
     map.value.addSource('network', { type: 'geojson', data: geojson })
-    for (const id of ['lower', 'upper', 'points', 'picked']) {
+    for (const id of ['area', 'lower', 'upper', 'points', 'picked']) {
       map.value.addSource(id, { type: 'geojson', data: EMPTY })
     }
+    // An area sits under the network, so the streets stay legible through it.
+    map.value.addLayer({
+      id: 'area', type: 'fill', source: 'area',
+      paint: { 'fill-color': '#000', 'fill-opacity': 0 }
+    })
     map.value.addLayer({
       id: 'network', type: 'line', source: 'network',
       paint: { 'line-color': '#64748b', 'line-width': 1.2, 'line-opacity': 0.85 }
@@ -340,8 +356,8 @@ onUnmounted(() => {
     </div>
 
     <p v-if="legend" class="legend">
-      <span v-for="([colour, text]) in legend" :key="text">
-        <i class="swatch" :style="{ background: colour }"></i>{{ text }}
+      <span v-for="([colour, text, kind]) in legend" :key="text">
+        <i class="swatch" :class="kind" :style="{ background: colour }"></i>{{ text }}
       </span>
     </p>
 
@@ -394,6 +410,7 @@ onUnmounted(() => {
 .legend { gap: 1rem; }
 .legend span { display: flex; align-items: center; gap: .4rem; }
 .swatch { width: 1.1rem; height: 3px; border-radius: 2px; display: inline-block; }
+.swatch.area { height: .8rem; opacity: .35; }
 .status .result { color: var(--vp-c-brand-1); font-weight: 600; }
 .sql {
   font-size: .78rem; margin-top: .5rem; padding: .6rem .8rem;
