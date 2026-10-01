@@ -118,3 +118,20 @@ cmake --build build/canary
 
 Then the usual `make`, `make test` and `make format-check` against 1.5, since
 a compat change has to hold on both sides.
+
+# Keeping the docs demo in step with DuckDB
+
+The demo in `docs/.vitepress/components/RoutingDemo.vue` runs
+`INSTALL duckrouting FROM community` inside duckdb-wasm, so it loads the
+community binary built for whichever DuckDB version the pinned
+`@duckdb/duckdb-wasm` embeds. The community repo rebuilds only the current
+stable DuckDB slot; older slots keep whatever was last built for them. After
+a DuckDB bump in `MainDistributionPipeline.yml`, a new duckrouting release
+lands only in the new slot and the demo, still on the old slot, reports
+`Table Function ... does not exist` for anything added since.
+
+When `duckdb_version` changes, bump `@duckdb/duckdb-wasm` in `docs/package.json`
+to a build that embeds the same DuckDB. The right version is usually on the
+`next` npm tag (`npm view @duckdb/duckdb-wasm dist-tags`); check with
+
+    strings node_modules/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
