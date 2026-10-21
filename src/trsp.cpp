@@ -1,6 +1,5 @@
+#include "duckrouting/options.hpp"
 #include "duckrouting/graph_functions.hpp"
-#include "duckrouting/compat.hpp"
-
 #include "duckrouting/graph.hpp"
 #include "duckrouting/yen.hpp"
 
@@ -374,28 +373,28 @@ void ReadOptions(TableFunctionBindInput &input, TrspBindData &bind_data) {
 		if (parameter.second.IsNull()) {
 			throw BinderException("duckrouting: '%s' must not be NULL", parameter.first.c_str());
 		}
-		if (NameMatches(parameter.first, "directed")) {
+		if (parameter.first == "directed") {
 			bind_data.directed = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "strict")) {
+		} else if (parameter.first == "strict") {
 			bind_data.strict = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "u_turn_on_edge")) {
+		} else if (parameter.first == "u_turn_on_edge") {
 			bind_data.u_turn_on_edge = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "details")) {
+		} else if (parameter.first == "details") {
 			bind_data.details = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "driving_side")) {
+		} else if (parameter.first == "driving_side") {
 			const std::string side = parameter.second.GetValue<std::string>();
 			bind_data.driving_side = side.empty() ? 'b' : static_cast<char>(std::tolower(side[0]));
 		}
 	}
 }
 
-void PathColumns(duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+void PathColumns(duckdb::vector<LogicalType> &return_types, duckdb::vector<duckdb::Identifier> &names) {
 	names = {"seq", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
 	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
 	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
 }
 
-void ViaColumns(duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+void ViaColumns(duckdb::vector<LogicalType> &return_types, duckdb::vector<duckdb::Identifier> &names) {
 	names = {"seq",  "path_id", "path_seq", "start_vid", "end_vid",
 	         "node", "edge",    "cost",     "agg_cost",  "route_agg_cost"};
 	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
@@ -406,7 +405,8 @@ void ViaColumns(duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
 //! WithPoints variants slot a points query in after the restrictions one.
 template <bool WithPoints, bool Via>
 duckdb::unique_ptr<FunctionData> TrspBind(ClientContext &, TableFunctionBindInput &input,
-                                          duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                          duckdb::vector<LogicalType> &return_types,
+                                          duckdb::vector<duckdb::Identifier> &names) {
 	if (input.inputs[0].IsNull() || input.inputs[1].IsNull()) {
 		throw BinderException("duckrouting: the edges and restrictions queries must not be NULL");
 	}

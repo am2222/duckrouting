@@ -1,6 +1,5 @@
+#include "duckrouting/options.hpp"
 #include "duckrouting/graph_functions.hpp"
-#include "duckrouting/compat.hpp"
-
 #include "duckrouting/graph.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -357,17 +356,17 @@ void ReadOptions(TableFunctionBindInput &input, AStarOptions &options) {
 		if (parameter.second.IsNull()) {
 			throw BinderException("duckrouting: '%s' must not be NULL", parameter.first.c_str());
 		}
-		if (NameMatches(parameter.first, "directed")) {
+		if (parameter.first == "directed") {
 			options.directed = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "heuristic")) {
+		} else if (parameter.first == "heuristic") {
 			const int64_t value = parameter.second.GetValue<int64_t>();
 			if (value < 0 || value > 5) {
 				throw BinderException("duckrouting: 'heuristic' must be between 0 and 5");
 			}
 			options.heuristic = static_cast<Heuristic>(value);
-		} else if (NameMatches(parameter.first, "factor")) {
+		} else if (parameter.first == "factor") {
 			options.factor = parameter.second.GetValue<double>();
-		} else if (NameMatches(parameter.first, "epsilon")) {
+		} else if (parameter.first == "epsilon") {
 			options.epsilon = parameter.second.GetValue<double>();
 			// An epsilon below 1 would shrink the heuristic, which pgRouting
 			// rejects rather than silently ignore.
@@ -380,7 +379,8 @@ void ReadOptions(TableFunctionBindInput &input, AStarOptions &options) {
 
 //! (seq, path_seq, start_vid, end_vid, node, edge, cost, agg_cost)
 duckdb::unique_ptr<FunctionData> AStarBind(ClientContext &, TableFunctionBindInput &input,
-                                           duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                           duckdb::vector<LogicalType> &return_types,
+                                           duckdb::vector<duckdb::Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -427,7 +427,8 @@ void AStarScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 
 //! (start_vid, end_vid, agg_cost) -- the cost and matrix forms.
 duckdb::unique_ptr<FunctionData> AStarCostBind(ClientContext &context, TableFunctionBindInput &input,
-                                               duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                               duckdb::vector<LogicalType> &return_types,
+                                               duckdb::vector<duckdb::Identifier> &names) {
 	AStarBind(context, input, return_types, names);
 	auto bind_data = duckdb::make_uniq<AStarBindData>();
 	bind_data->edges_sql = input.inputs[0].GetValue<std::string>();
@@ -445,7 +446,8 @@ duckdb::unique_ptr<FunctionData> AStarCostBind(ClientContext &context, TableFunc
 
 //! The matrix form routes one vertex list against itself.
 duckdb::unique_ptr<FunctionData> AStarMatrixBind(ClientContext &, TableFunctionBindInput &input,
-                                                 duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                                 duckdb::vector<LogicalType> &return_types,
+                                                 duckdb::vector<duckdb::Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}

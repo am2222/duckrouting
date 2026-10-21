@@ -1,4 +1,4 @@
-#include "duckrouting/compat.hpp"
+#include "duckrouting/options.hpp"
 #include "duckrouting/graph.hpp"
 #include "duckrouting/graph_functions.hpp"
 #include "duckrouting/yen.hpp"
@@ -442,20 +442,20 @@ duckdb::unique_ptr<MapMatchBindData> ReadArguments(TableFunctionBindInput &input
 	}
 	for (auto &parameter : input.named_parameters) {
 		if (parameter.second.IsNull()) {
-			throw BinderException("duckrouting: '%s' must not be NULL", NameText(parameter.first).c_str());
+			throw BinderException("duckrouting: '%s' must not be NULL", parameter.first.GetIdentifierName().c_str());
 		}
-		if (NameMatches(parameter.first, "gps_error")) {
+		if (parameter.first == "gps_error") {
 			bind_data->options.gps_error = PositiveDouble(parameter.second, "gps_error");
-		} else if (NameMatches(parameter.first, "delta")) {
+		} else if (parameter.first == "delta") {
 			bind_data->options.delta = PositiveDouble(parameter.second, "delta");
-		} else if (NameMatches(parameter.first, "reverse_tolerance")) {
+		} else if (parameter.first == "reverse_tolerance") {
 			bind_data->options.reverse_tolerance = parameter.second.GetValue<double>();
 			if (bind_data->options.reverse_tolerance < 0) {
 				throw BinderException("duckrouting: 'reverse_tolerance' must not be negative");
 			}
-		} else if (NameMatches(parameter.first, "directed")) {
+		} else if (parameter.first == "directed") {
 			bind_data->options.directed = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "details")) {
+		} else if (parameter.first == "details") {
 			bind_data->details = parameter.second.GetValue<bool>();
 		}
 	}
@@ -463,7 +463,8 @@ duckdb::unique_ptr<MapMatchBindData> ReadArguments(TableFunctionBindInput &input
 }
 
 duckdb::unique_ptr<FunctionData> MatchBind(ClientContext &, TableFunctionBindInput &input,
-                                           duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                           duckdb::vector<LogicalType> &return_types,
+                                           duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = ReadArguments(input);
 	names = {"seq", "traj_id", "pid", "edge", "fraction", "distance", "ep", "tp", "sp_dist"};
 	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
@@ -501,7 +502,8 @@ void MatchScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 }
 
 duckdb::unique_ptr<FunctionData> PathBind(ClientContext &, TableFunctionBindInput &input,
-                                          duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                          duckdb::vector<LogicalType> &return_types,
+                                          duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = ReadArguments(input);
 	names = {"seq", "path_id", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
 	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,

@@ -1,6 +1,5 @@
+#include "duckrouting/options.hpp"
 #include "duckrouting/graph_functions.hpp"
-#include "duckrouting/compat.hpp"
-
 #include "duckrouting/graph.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -284,7 +283,8 @@ std::vector<int64_t> Ids(const Value &value) {
 
 template <int Fixed>
 duckdb::unique_ptr<FunctionData> ContractBind(ClientContext &, TableFunctionBindInput &input,
-                                              duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                              duckdb::vector<LogicalType> &return_types,
+                                              duckdb::vector<duckdb::Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -307,16 +307,16 @@ duckdb::unique_ptr<FunctionData> ContractBind(ClientContext &, TableFunctionBind
 		if (parameter.second.IsNull()) {
 			throw BinderException("duckrouting: '%s' must not be NULL", parameter.first.c_str());
 		}
-		if (NameMatches(parameter.first, "directed")) {
+		if (parameter.first == "directed") {
 			bind_data->directed = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "forbidden")) {
+		} else if (parameter.first == "forbidden") {
 			bind_data->forbidden = Ids(parameter.second);
-		} else if (Fixed == 0 && NameMatches(parameter.first, "cycles")) {
+		} else if (Fixed == 0 && parameter.first == "cycles") {
 			bind_data->cycles = parameter.second.GetValue<int64_t>();
 			if (bind_data->cycles < 1) {
 				throw BinderException("duckrouting: 'cycles' must be at least 1");
 			}
-		} else if (Fixed == 0 && NameMatches(parameter.first, "methods")) {
+		} else if (Fixed == 0 && parameter.first == "methods") {
 			bind_data->methods.clear();
 			auto values = Ids(parameter.second);
 			for (size_t i = 0; i < values.size(); i++) {

@@ -1,6 +1,4 @@
 #include "duckrouting/graph_functions.hpp"
-#include "duckrouting/compat.hpp"
-
 #include "duckrouting/graph.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -171,7 +169,8 @@ void ReadEdgesArgument(TableFunctionBindInput &input, OrderingBindData &bind_dat
 
 //! (seq, node) -- the four ordering functions.
 duckdb::unique_ptr<FunctionData> OrderingBind(ClientContext &, TableFunctionBindInput &input,
-                                              duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                              duckdb::vector<LogicalType> &return_types,
+                                              duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = duckdb::make_uniq<OrderingBindData>();
 	ReadEdgesArgument(input, *bind_data);
 	names = {"seq", "node"};
@@ -201,7 +200,8 @@ void OrderingScan(ClientContext &, TableFunctionInput &data, DataChunk &output) 
 
 //! (node, targets) -- transitiveClosure.
 duckdb::unique_ptr<FunctionData> ClosureBind(ClientContext &, TableFunctionBindInput &input,
-                                             duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                             duckdb::vector<LogicalType> &return_types,
+                                             duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = duckdb::make_uniq<OrderingBindData>();
 	ReadEdgesArgument(input, *bind_data);
 	names = {"node", "targets"};
