@@ -1,6 +1,5 @@
+#include "duckrouting/options.hpp"
 #include "duckrouting/graph_functions.hpp"
-#include "duckrouting/compat.hpp"
-
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/table_function.hpp"
 
@@ -92,17 +91,17 @@ void ReadCommon(TableFunctionBindInput &input, WithPointsBindData &bind_data, id
 		if (parameter.second.IsNull()) {
 			throw BinderException("duckrouting: '%s' must not be NULL", parameter.first.c_str());
 		}
-		if (NameMatches(parameter.first, "directed")) {
+		if (parameter.first == "directed") {
 			bind_data.directed = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "details")) {
+		} else if (parameter.first == "details") {
 			bind_data.details = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "driving_side")) {
+		} else if (parameter.first == "driving_side") {
 			bind_data.driving_side = ReadSide(parameter.second);
-		} else if (NameMatches(parameter.first, "heap_paths")) {
+		} else if (parameter.first == "heap_paths") {
 			bind_data.heap_paths = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "strict")) {
+		} else if (parameter.first == "strict") {
 			bind_data.strict = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "u_turn_on_edge")) {
+		} else if (parameter.first == "u_turn_on_edge") {
 			bind_data.u_turn_on_edge = parameter.second.GetValue<bool>();
 		}
 	}
@@ -111,7 +110,7 @@ void ReadCommon(TableFunctionBindInput &input, WithPointsBindData &bind_data, id
 	}
 }
 
-void PathColumns(duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+void PathColumns(duckdb::vector<LogicalType> &return_types, duckdb::vector<duckdb::Identifier> &names) {
 	names = {"seq", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
 	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
 	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
@@ -159,7 +158,8 @@ std::vector<EdgeRow> PreparedGraph(ClientContext &context, const WithPointsBindD
 
 template <bool CostsOnly>
 duckdb::unique_ptr<FunctionData> PairBind(ClientContext &, TableFunctionBindInput &input,
-                                          duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                          duckdb::vector<LogicalType> &return_types,
+                                          duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = duckdb::make_uniq<WithPointsBindData>();
 	bind_data->starts = Ids(input.inputs[2], "start_vid");
 	bind_data->ends = Ids(input.inputs[3], "end_vid");
@@ -197,7 +197,8 @@ duckdb::unique_ptr<GlobalTableFunctionState> WithPointsCostInit(ClientContext &c
 // --- withPointsCostMatrix ---------------------------------------------------
 
 duckdb::unique_ptr<FunctionData> MatrixBind(ClientContext &, TableFunctionBindInput &input,
-                                            duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                            duckdb::vector<LogicalType> &return_types,
+                                            duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = duckdb::make_uniq<WithPointsBindData>();
 	bind_data->starts = Ids(input.inputs[2], "vids");
 	bind_data->ends = bind_data->starts;
@@ -210,7 +211,8 @@ duckdb::unique_ptr<FunctionData> MatrixBind(ClientContext &, TableFunctionBindIn
 // --- withPointsVia ----------------------------------------------------------
 
 duckdb::unique_ptr<FunctionData> ViaBind(ClientContext &, TableFunctionBindInput &input,
-                                         duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                         duckdb::vector<LogicalType> &return_types,
+                                         duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = duckdb::make_uniq<WithPointsBindData>();
 	bind_data->via = Ids(input.inputs[2], "via_vids");
 	ReadCommon(input, *bind_data, 3);
@@ -253,7 +255,8 @@ void ViaScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 // --- withPointsKSP ----------------------------------------------------------
 
 duckdb::unique_ptr<FunctionData> KspBind(ClientContext &, TableFunctionBindInput &input,
-                                         duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                         duckdb::vector<LogicalType> &return_types,
+                                         duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = duckdb::make_uniq<WithPointsBindData>();
 	bind_data->starts = Ids(input.inputs[2], "start_vid");
 	bind_data->ends = Ids(input.inputs[3], "end_vid");

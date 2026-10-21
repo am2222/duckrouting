@@ -1,6 +1,5 @@
+#include "duckrouting/options.hpp"
 #include "duckrouting/graph_functions.hpp"
-#include "duckrouting/compat.hpp"
-
 #include "duckrouting/graph.hpp"
 #include "duckrouting/yen.hpp"
 
@@ -358,7 +357,7 @@ void ReadEdgesArgument(TableFunctionBindInput &input, TransformBindData &bind_da
 		bind_data.directed = input.inputs[1].GetValue<bool>();
 	}
 	for (auto &parameter : input.named_parameters) {
-		if (NameMatches(parameter.first, "directed")) {
+		if (parameter.first == "directed") {
 			if (parameter.second.IsNull()) {
 				throw BinderException("duckrouting: 'directed' must not be NULL");
 			}
@@ -371,7 +370,8 @@ void ReadEdgesArgument(TableFunctionBindInput &input, TransformBindData &bind_da
 //! swaps the last column for the edge it came from.
 template <bool Full>
 duckdb::unique_ptr<FunctionData> TransformBind(ClientContext &, TableFunctionBindInput &input,
-                                               duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                               duckdb::vector<LogicalType> &return_types,
+                                               duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = duckdb::make_uniq<TransformBindData>();
 	ReadEdgesArgument(input, *bind_data);
 	if (Full) {
@@ -416,7 +416,8 @@ void TransformScan(ClientContext &, TableFunctionInput &data, DataChunk &output)
 }
 
 duckdb::unique_ptr<FunctionData> PostmanBind(ClientContext &, TableFunctionBindInput &input,
-                                             duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                             duckdb::vector<LogicalType> &return_types,
+                                             duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = duckdb::make_uniq<TransformBindData>();
 	ReadEdgesArgument(input, *bind_data);
 	names = {"seq", "node", "edge", "cost", "agg_cost"};
@@ -448,7 +449,8 @@ void PostmanScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 }
 
 duckdb::unique_ptr<FunctionData> PostmanCostBind(ClientContext &, TableFunctionBindInput &input,
-                                                 duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                                 duckdb::vector<LogicalType> &return_types,
+                                                 duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = duckdb::make_uniq<TransformBindData>();
 	ReadEdgesArgument(input, *bind_data);
 	names = {"cost"};

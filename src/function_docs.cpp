@@ -1,7 +1,5 @@
 #include "duckrouting/function_docs.hpp"
 
-#include "duckrouting/compat.hpp"
-
 #include "duckdb/common/exception.hpp"
 
 #include <cstddef>
@@ -26,10 +24,9 @@ const size_t kMaxCategories = 3;
 //! optional argument in this extension is appended rather than inserted --
 //! pgRouting spells its options positionally in that order.
 //!
-//! Named parameters are deliberately absent. `duckdb_functions()` reports them
-//! after the positional ones, in whatever order the function's own map yields,
-//! so they are read back off the function itself rather than written down here
-//! where the two could disagree.
+//! Named options are deliberately absent. They are declared on each function's
+//! signature, which `duckdb_functions()` reads them from, so writing them down
+//! here as well would only give the two a chance to disagree.
 struct FunctionDoc {
 	const char *name;
 	const char *parameters[kMaxParameters];
@@ -668,62 +665,51 @@ FunctionDescription Prose(const FunctionDoc &doc) {
 	return description;
 }
 
-//! Names the positional arguments of one overload from the documented list.
-void NamePositionalArguments(const FunctionDoc &doc, const duckdb::vector<duckdb::LogicalType> &arguments,
-                             FunctionDescription &description) {
-	for (size_t i = 0; i < arguments.size(); i++) {
-		if (i >= kMaxParameters || doc.parameters[i] == nullptr) {
+//! Names the positional parameters of one overload from the documented list.
+//! A function built from a list of argument types declares them positional-only
+//! and named `colN`, which is what `duckdb_functions()` would report. They stay
+//! positional-only: several functions take `directed` both by position and as
+//! an option, and DuckDB rejects an option sharing a name a caller could use.
+void NameParameters(const FunctionDoc &doc, duckdb::FunctionSignature &signature) {
+	size_t position = 0;
+	for (duckdb::idx_t i = 0; i < signature.GetParameterCount(); i++) {
+		auto &parameter = signature.GetParameter(i);
+		if (parameter.GetKind() != duckdb::FunctionParameterKind::POSITIONAL_ONLY) {
+			continue;
+		}
+		if (position >= kMaxParameters || doc.parameters[position] == nullptr) {
 			throw InternalException("duckrouting: '%s' has an overload taking more arguments than are documented",
 			                        doc.name);
 		}
-		description.parameter_names.push_back(doc.parameters[i]);
+		parameter.SetName(doc.parameters[position]);
+		position++;
 	}
 }
 
 } // namespace
 
 duckdb::CreateTableFunctionInfo Documented(duckdb::TableFunctionSet set) {
-	const FunctionDoc &doc = Require(NameText(set.name));
+	const FunctionDoc &doc = Require(set.name.GetIdentifierName());
+	set.ApplyToFunctions([&](duckdb::TableFunction &function) { NameParameters(doc, function.GetSignature()); });
 	duckdb::CreateTableFunctionInfo info(std::move(set));
 	// What the bare RegisterFunction(TableFunctionSet) overload does before
 	// handing the info to the catalog; CreateInfo itself defaults to
 	// ERROR_ON_CONFLICT.
 	info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
-	for (size_t i = 0; i < info.functions.functions.size(); i++) {
-		const duckdb::TableFunction &function = Overload(info.functions.functions[i]);
-		const duckdb::vector<duckdb::LogicalType> &arguments = ArgumentTypes(function);
-		FunctionDescription description = Prose(doc);
-		description.parameter_types = arguments;
-		NamePositionalArguments(doc, arguments, description);
-		// duckdb_functions() lists named parameters after the positional ones,
-		// in the order the function itself yields them, and falls back to
-		// `colN` for any name the description does not reach. Reading them back
-		// off the function is the only way to keep the two in step.
-		for (auto &named : NamedParameterNames(function)) {
-			description.parameter_names.push_back(named);
-		}
-		info.descriptions.push_back(description);
-	}
+	// The names live on each overload's signature, so a lone description with
+	// no parameter types attaches to every overload.
+	info.descriptions.push_back(Prose(doc));
 	return info;
 }
 
 duckdb::CreateScalarFunctionInfo Documented(duckdb::ScalarFunction function) {
-	const FunctionDoc &doc = Require(NameText(function.name));
+	const FunctionDoc &doc = Require(function.name.GetIdentifierName());
+	NameParameters(doc, function.GetSignature());
 	duckdb::ScalarFunctionSet set(function.name);
 	set.AddFunction(std::move(function));
 	duckdb::CreateScalarFunctionInfo info(std::move(set));
 	info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
-	// There is only ever one overload here, so a lone description with no
-	// parameter types attaches to it whatever its arity, and a name past the
-	// last argument is simply never read. That is worth the small asymmetry
-	// with the table functions above: it avoids reaching for the argument
-	// types, which v2 keeps inside a FunctionSignature rather than on the
-	// function itself.
-	FunctionDescription description = Prose(doc);
-	for (size_t i = 0; i < kMaxParameters && doc.parameters[i] != nullptr; i++) {
-		description.parameter_names.push_back(doc.parameters[i]);
-	}
-	info.descriptions.push_back(description);
+	info.descriptions.push_back(Prose(doc));
 	return info;
 }
 
@@ -731,7 +717,7 @@ void Document(duckdb::CreateMacroInfo &info) {
 	// A macro already reports the parameter names it was declared with, and a
 	// lone description with no parameter types attaches to every overload
 	// without displacing them.
-	info.descriptions.push_back(Prose(Require(NameText(InfoName(info)))));
+	info.descriptions.push_back(Prose(Require(info.GetFunctionName().GetIdentifierName())));
 }
 
 } // namespace duckrouting

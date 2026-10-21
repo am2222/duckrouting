@@ -1,6 +1,4 @@
 #include "duckrouting/edges.hpp"
-#include "duckrouting/compat.hpp"
-
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
@@ -22,19 +20,17 @@ using duckdb::string;
 namespace {
 
 //! Case-insensitive membership test over the column names of `edges_sql`.
-//! Templated on the container for the same reason.
-template <typename Names>
-bool HasColumn(const Names &names, const char *wanted) {
-	for (auto it = names.begin(); it != names.end(); ++it) {
-		if (NameMatches(*it, wanted)) {
+//! An Identifier already compares case-insensitively against a literal.
+bool HasColumn(const duckdb::vector<duckdb::Identifier> &names, const char *wanted) {
+	for (auto &name : names) {
+		if (name == wanted) {
 			return true;
 		}
 	}
 	return false;
 }
 
-template <typename Names>
-void RequireColumn(const Names &names, const char *wanted) {
+void RequireColumn(const duckdb::vector<duckdb::Identifier> &names, const char *wanted) {
 	if (!HasColumn(names, wanted)) {
 		throw BinderException("duckrouting: the edges query must expose a '%s' column", wanted);
 	}
@@ -495,8 +491,8 @@ std::vector<Restriction> LoadRestrictions(ClientContext &context, const string &
 		throw InvalidInputException("duckrouting: the restrictions query failed: %s", result->GetError());
 	}
 
-	// Read chunk by chunk, like the other loaders: v2's Connection::Query no
-	// longer promises a materialised result with random access.
+	// Read chunk by chunk, like the other loaders: Connection::Query does not
+	// promise a materialised result with random access.
 	std::vector<Restriction> restrictions;
 	while (true) {
 		auto chunk = result->Fetch();

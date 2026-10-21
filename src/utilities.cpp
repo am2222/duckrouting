@@ -1,6 +1,5 @@
+#include "duckrouting/options.hpp"
 #include "duckrouting/graph_functions.hpp"
-#include "duckrouting/compat.hpp"
-
 #include "duckrouting/graph.hpp"
 #include "duckrouting/yen.hpp"
 
@@ -287,17 +286,17 @@ void ReadPathArguments(TableFunctionBindInput &input, UtilityBindData &bind_data
 		if (parameter.second.IsNull()) {
 			throw BinderException("duckrouting: '%s' must not be NULL", parameter.first.c_str());
 		}
-		if (NameMatches(parameter.first, "directed")) {
+		if (parameter.first == "directed") {
 			bind_data.directed = parameter.second.GetValue<bool>();
-		} else if (NameMatches(parameter.first, "heuristic")) {
+		} else if (parameter.first == "heuristic") {
 			const int64_t value = parameter.second.GetValue<int64_t>();
 			if (value < 0 || value > 5) {
 				throw BinderException("duckrouting: 'heuristic' must be between 0 and 5");
 			}
 			bind_data.options.heuristic = static_cast<Heuristic>(value);
-		} else if (NameMatches(parameter.first, "factor")) {
+		} else if (parameter.first == "factor") {
 			bind_data.options.factor = parameter.second.GetValue<double>();
-		} else if (NameMatches(parameter.first, "epsilon")) {
+		} else if (parameter.first == "epsilon") {
 			bind_data.options.epsilon = parameter.second.GetValue<double>();
 			if (bind_data.options.epsilon < 1) {
 				throw BinderException("duckrouting: 'epsilon' must be at least 1");
@@ -307,7 +306,7 @@ void ReadPathArguments(TableFunctionBindInput &input, UtilityBindData &bind_data
 	bind_data.options.directed = bind_data.directed;
 }
 
-void PathColumns(duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+void PathColumns(duckdb::vector<LogicalType> &return_types, duckdb::vector<duckdb::Identifier> &names) {
 	names = {"seq", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
 	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
 	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
@@ -331,7 +330,7 @@ void PathScan(ClientContext &, TableFunctionInput &data, DataChunk &output) {
 	state.offset += count;
 }
 
-void CostColumns(duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+void CostColumns(duckdb::vector<LogicalType> &return_types, duckdb::vector<duckdb::Identifier> &names) {
 	names = {"start_vid", "end_vid", "agg_cost"};
 	return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE};
 }
@@ -355,7 +354,8 @@ enum class PathAlgorithm { BdDijkstra, BdAStar, EdwardMooreAlgorithm, BinaryBfs 
 
 template <PathAlgorithm Algorithm, bool CostsOnly>
 duckdb::unique_ptr<FunctionData> PathBind(ClientContext &, TableFunctionBindInput &input,
-                                          duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                          duckdb::vector<LogicalType> &return_types,
+                                          duckdb::vector<duckdb::Identifier> &names) {
 	auto bind_data = duckdb::make_uniq<UtilityBindData>();
 	ReadPathArguments(input, *bind_data);
 	if (CostsOnly) {
@@ -369,7 +369,8 @@ duckdb::unique_ptr<FunctionData> PathBind(ClientContext &, TableFunctionBindInpu
 //! The matrix forms route one vertex list against itself.
 template <PathAlgorithm Algorithm>
 duckdb::unique_ptr<FunctionData> MatrixBind(ClientContext &, TableFunctionBindInput &input,
-                                            duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                            duckdb::vector<LogicalType> &return_types,
+                                            duckdb::vector<duckdb::Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -381,7 +382,7 @@ duckdb::unique_ptr<FunctionData> MatrixBind(ClientContext &, TableFunctionBindIn
 		bind_data->directed = input.inputs[2].GetValue<bool>();
 	}
 	for (auto &parameter : input.named_parameters) {
-		if (!parameter.second.IsNull() && NameMatches(parameter.first, "directed")) {
+		if (!parameter.second.IsNull() && parameter.first == "directed") {
 			bind_data->directed = parameter.second.GetValue<bool>();
 		}
 	}
@@ -427,7 +428,8 @@ duckdb::unique_ptr<GlobalTableFunctionState> CostInit(ClientContext &context, Ta
 // --- extract_vertices, degree, full_version ---------------------------------
 
 duckdb::unique_ptr<FunctionData> VerticesBind(ClientContext &, TableFunctionBindInput &input,
-                                              duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                              duckdb::vector<LogicalType> &return_types,
+                                              duckdb::vector<duckdb::Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -468,7 +470,8 @@ void VerticesScan(ClientContext &, TableFunctionInput &data, DataChunk &output) 
 }
 
 duckdb::unique_ptr<FunctionData> DegreeBind(ClientContext &, TableFunctionBindInput &input,
-                                            duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                            duckdb::vector<LogicalType> &return_types,
+                                            duckdb::vector<duckdb::Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("duckrouting: the edges query must not be NULL");
 	}
@@ -508,7 +511,8 @@ struct VersionState : public GlobalTableFunctionState {
 };
 
 duckdb::unique_ptr<FunctionData> FullVersionBind(ClientContext &, TableFunctionBindInput &,
-                                                 duckdb::vector<LogicalType> &return_types, ColumnNames &names) {
+                                                 duckdb::vector<LogicalType> &return_types,
+                                                 duckdb::vector<duckdb::Identifier> &names) {
 	names = {"version", "boost", "compiler", "build_type"};
 	return_types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
 	return nullptr;

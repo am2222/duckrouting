@@ -4,6 +4,9 @@
 duckdb_extension_load(duckrouting
     SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
 )
+# Building an extension no longer links it into the shell and unittest; without
+# this the SQL tests skip on `require duckrouting`.
+duckdb_extension_statically_link(duckrouting)
 
 # The three geometry helpers are SQL macros over DuckDB's spatial extension, so
 # spatial is only needed at runtime -- `INSTALL spatial; LOAD spatial;` -- not
