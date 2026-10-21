@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/am2222/duckrouting/compare/v0.1.5...v0.1.6) (2026-10-21)
+
+
+### Features
+
+* build against DuckDB v2.0.0 ([6df1dcc](https://github.com/am2222/duckrouting/commit/6df1dcc50f298f4327e0fdc70e9e08834739d0af))
+
 ## [0.1.5](https://github.com/am2222/duckrouting/compare/v0.1.4...v0.1.5) (2026-09-30)
 
 
